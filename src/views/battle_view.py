@@ -43,7 +43,7 @@ class BattleView:
         self.screen.fill(settings.BLACK)
         
         self.status_drawer.draw(self.screen, battle_state.player, settings.BLUE, False)
-        for i, enemy in enumerate(battle_state.enemies):
+        for i, enemy in enumerate(battle_state.enemy_manager.enemies):
             if enemy.is_alive:
                 is_selected = (i == battle_state.targeted_enemy_index)
                 self.status_drawer.draw(self.screen, enemy, settings.RED, is_selected)

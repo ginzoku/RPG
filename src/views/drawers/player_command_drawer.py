@@ -52,10 +52,9 @@ class PlayerCommandDrawer:
 
     def _draw_single_card(self, screen: pygame.Surface, battle_state: BattleScene, action_id: str, card_rect: pygame.Rect, card_index: int):
         action = ACTIONS[action_id]
-        is_used = card_index in battle_state.used_card_indices
         can_afford = battle_state.player.current_mana >= action.get("cost", 0)
 
-        if is_used or not can_afford:
+        if not can_afford:
             card_bg_color, card_border_color, text_color = ((20, 20, 30), (80, 80, 80), settings.DARK_GRAY)
         else:
             card_bg_color, card_border_color, text_color = ((40, 40, 60), settings.WHITE, settings.LIGHT_BLUE)

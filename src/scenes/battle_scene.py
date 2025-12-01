@@ -7,8 +7,8 @@ from ..components.monster import Monster
 from ..data.action_data import ACTIONS
 from ..components.deck_manager import DeckManager
 from ..components.action_handler import ActionHandler
+from ..components.enemy_manager import EnemyManager
 from ..components.input_handler import InputHandler
-from ..data.monster_data import MONSTERS
 from ..data.monster_action_data import MONSTER_ACTIONS
 from ..data.relic_data import RELICS
 from ..data.enemy_group_data import ENEMY_GROUPS, ENEMY_POSITIONS
@@ -16,53 +16,28 @@ from ..config import settings
 
 class BattleScene:
     def __init__(self):
-        self.input_handler = InputHandler(self)
         self.reset()
 
     def reset(self):
         # プレイヤーと敵の初期化
-        
         self.player = Character("勇者", max_hp=100, max_mp=3, attack_power=0, x=150, y=settings.SCREEN_HEIGHT // 2 - 100)
-        self.enemies: list[Monster] = []
-        
-        # --- 敵グループの生成 ---
-        group_id = random.choice(list(ENEMY_GROUPS.keys()))
-        enemy_group = ENEMY_GROUPS[group_id]
-        positions = ENEMY_POSITIONS[len(enemy_group)]
-
-        for enemy_info in enemy_group:
-            monster_data = MONSTERS[enemy_info["id"]]
-            pos = positions[enemy_info["pos_index"]]
-            enemy = Monster(name=monster_data["name"], max_hp=monster_data["max_hp"], attack_power=monster_data["attack_power"],
-                            actions=monster_data["actions"], x=pos[0], y=pos[1])
-            self.enemies.append(enemy)
-        
-        # 敵リストをX座標でソートして、左から右の順にする
-        self.enemies.sort(key=lambda e: e.x)
-
+        self.enemy_manager = EnemyManager(self.player)
+        self.enemy_manager.setup_enemies()
+        self.input_handler = InputHandler(self)
         
         # ゲーム状態
         self.turn: str = "player"
         self.battle_log: list[str] = []
         self.max_log_lines: int = 4
         self.game_over: bool = False
-        self.winner = None
-        self.used_card_indices: set[int] = set()
+        self.winner: str | None = None
         self.hovered_card_index: int | None = None
         self.hovered_relic_index: int | None = None
         self.targeted_enemy_index: int | None = None # 現在選択されている敵のインデックス
 
-        # 敵のターン進行管理用
-        self.enemy_turn_state: str = "start" # "start", "acting", "finished"
-        self.acting_enemy_index: int = 0
-        self.animation_duration: int = 400 # 0.4秒
-
         initial_deck = (["slash"] * 5) + (["guard"] * 5) + (["fire_ball"] * 1) + (["expose_weakness"] * 2) + (["healing_light"] * 1) + (["draw_card"] * 1)
         self.deck_manager = DeckManager(initial_deck)
         self.deck_manager.draw_cards(5)
-        
-        for enemy in self.enemies:
-            enemy.decide_next_action()
 
         # レリックの初期化と効果の適用
         self.player.relics.append("red_stone")
@@ -74,7 +49,7 @@ class BattleScene:
                         self.player.attack_power += effect["value"]
 
         # バトル開始時に一番左の敵をデフォルトターゲットに設定
-        first_living_enemy_index = next((i for i, e in enumerate(self.enemies) if e.is_alive), None)
+        first_living_enemy_index = next((i for i, e in enumerate(self.enemy_manager.enemies) if e.is_alive), None)
         self.targeted_enemy_index = first_living_enemy_index
 
         self.add_log("戦闘開始！")
@@ -85,7 +60,7 @@ class BattleScene:
             self.battle_log.pop(0)
     
     def _check_game_over(self):
-        if all(not enemy.is_alive for enemy in self.enemies):
+        if all(not enemy.is_alive for enemy in self.enemy_manager.enemies):
             self.add_log("敵を全て倒した！")
             self.game_over = True
             self.winner = "player"
@@ -103,14 +78,14 @@ class BattleScene:
             return
 
         # 現在のターゲットがまだ生きているか、そもそも敵が全滅している場合は何もしない
-        if self.enemies[self.targeted_enemy_index].is_alive or all(not e.is_alive for e in self.enemies):
+        if self.enemy_manager.enemies[self.targeted_enemy_index].is_alive or all(not e.is_alive for e in self.enemy_manager.enemies):
             return
 
-        num_enemies = len(self.enemies)
+        num_enemies = len(self.enemy_manager.enemies)
         # 倒された敵の右隣から探し始める
         for i in range(1, num_enemies):
             next_index = (self.targeted_enemy_index + i) % num_enemies
-            if self.enemies[next_index].is_alive:
+            if self.enemy_manager.enemies[next_index].is_alive:
                 self.targeted_enemy_index = next_index
                 return
         
@@ -122,9 +97,8 @@ class BattleScene:
         self.add_log("プレイヤーのターン終了")
         self.player.decrement_status_effects() # プレイヤーのターン終了処理
         self.deck_manager.discard_hand()
-        self.used_card_indices.clear() # ターン終了時にリセット
-        self.hovered_card_index = None # ホバー状態をリセット
-        self.enemy_turn_state = "start" # 敵のターン状態をリセット
+        self.hovered_card_index = None
+        self.enemy_manager.turn_state = "start"
 
     def set_target(self, enemy_index: int):
         """指定されたインデックスの敵をターゲットに設定する"""
@@ -136,8 +110,8 @@ class BattleScene:
         action = ACTIONS[action_id]
 
         target_enemy = None
-        if self.targeted_enemy_index is not None and self.enemies[self.targeted_enemy_index].is_alive:
-            target_enemy = self.enemies[self.targeted_enemy_index]
+        if self.targeted_enemy_index is not None and self.enemy_manager.enemies[self.targeted_enemy_index].is_alive:
+            target_enemy = self.enemy_manager.enemies[self.targeted_enemy_index]
 
         # 攻撃カードの場合、ターゲットが必要
         if action["type"] == "attack":
@@ -147,12 +121,14 @@ class BattleScene:
             log_messages = ActionHandler.execute_player_action(self.player, target_enemy, action_id, self.deck_manager)
         # 攻撃以外（スキルなど）なら即時実行
         else:
-            dummy_target = target_enemy or next((e for e in self.enemies if e.is_alive), None)
+            dummy_target = target_enemy or next((e for e in self.enemy_manager.enemies if e.is_alive), None)
             if not dummy_target: return # 実行対象がいない
             log_messages = ActionHandler.execute_player_action(self.player, dummy_target, action_id, self.deck_manager)
 
-        for msg in log_messages: self.add_log(msg)
-        self.used_card_indices.add(card_index)
+        for msg in log_messages:
+            self.add_log(msg)
+        self.deck_manager.move_used_card_to_discard(card_index)
+        self.hovered_card_index = None # ホバー状態をリセット
         self._update_target_after_enemy_death()
         self._check_game_over()
         if self.game_over: self.end_player_turn()
@@ -163,75 +139,17 @@ class BattleScene:
 
     def update_state(self):
         if self.turn == "enemy" and not self.game_over:
-            if self.enemy_turn_state == "start":
-                self.acting_enemy_index = 0
-                self.enemy_turn_state = "acting"
+            log_messages = self.enemy_manager.update_turn()
+            for msg in log_messages:
+                self.add_log(msg)
+            self._check_game_over()
 
-            elif self.enemy_turn_state == "acting":
-                if self.acting_enemy_index >= len(self.enemies):
-                    self.enemy_turn_state = "finished"
-                    return
-
-                enemy = self.enemies[self.acting_enemy_index]
-
-                if not enemy.is_alive:
-                    self.acting_enemy_index += 1 # 次の敵へ
-                    return
-
-                if not enemy.is_animating:
-                    # 行動を実行し、アニメーションを開始する
-                    action_id = enemy.next_action or enemy.choose_action()
-                    action_data = MONSTER_ACTIONS.get(action_id, {})
-                    intent_type = action_data.get("intent_type", "unknown")
-
-                    # 行動の実行
-                    log_messages = ActionHandler.execute_monster_action(enemy, self.player, action_id)
-                    for msg in log_messages: self.add_log(msg)
-                    self._check_game_over()
-
-                    # アニメーションタイプの決定
-                    if intent_type in ["attack", "attack_debuff"]:
-                        enemy.animation_type = "attack"
-                    else:
-                        enemy.animation_type = "shake"
-
-                    enemy.is_animating = True
-                    enemy.animation_start_time = pygame.time.get_ticks()
-                else:
-                    # アニメーション更新
-                    elapsed_time = pygame.time.get_ticks() - enemy.animation_start_time
-
-                    if elapsed_time < self.animation_duration:
-                        if enemy.animation_type == "attack":
-                            # 攻撃アニメーション（左へスライドして戻る）
-                            half_duration = self.animation_duration / 2
-                            if elapsed_time < half_duration:
-                                progress = elapsed_time / half_duration
-                                enemy.x = enemy.original_x - 50 * progress
-                            else:
-                                progress = (elapsed_time - half_duration) / half_duration
-                                enemy.x = (enemy.original_x - 50) + 50 * progress
-                        elif enemy.animation_type == "shake":
-                            # シェイクアニメーション（左右に細かく振動）
-                            progress = elapsed_time / self.animation_duration
-                            shake_offset = math.sin(progress * math.pi * 4) * 10 # 4回振動、振幅10px
-                            enemy.x = enemy.original_x + shake_offset
-                    else:
-                        # アニメーション終了
-                        enemy.is_animating = False
-                        enemy.x = enemy.original_x
-                        enemy.animation_type = None
-                        self.acting_enemy_index += 1 # 次の敵へ
-
-            elif self.enemy_turn_state == "finished":
-                # 全ての敵の行動が終わったらプレイヤーのターンへ
-                for enemy in self.enemies:
+            if self.enemy_manager.turn_state == "finished":
+                # 敵のターン終了処理
+                for enemy in self.enemy_manager.enemies:
                     enemy.decide_next_action()
                     enemy.decrement_status_effects()
-                    if hasattr(enemy, 'action_executed_this_turn'): del enemy.action_executed_this_turn
-                
                 self.turn = "player"
                 self.player.decrement_status_effects()
                 if not self.deck_manager.draw_cards(5): self.add_log("山札がありません！")
-                self.used_card_indices.clear()
                 self.player.fully_recover_mana()

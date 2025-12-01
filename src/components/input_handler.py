@@ -27,7 +27,7 @@ class InputHandler:
         """マウス移動イベントを処理し、ホバー状態を更新する"""
         self.scene.hovered_card_index = None
         self.scene.hovered_relic_index = None
-        for enemy in self.scene.enemies:
+        for enemy in self.scene.enemy_manager.enemies:
             enemy.is_targeted = False
 
         # レリックのホバー判定
@@ -42,7 +42,7 @@ class InputHandler:
                 return
 
         # 敵のホバー判定
-        for i, enemy in enumerate(self.scene.enemies):
+        for i, enemy in enumerate(self.scene.enemy_manager.enemies):
             if enemy.is_alive:
                 enemy_rect = pygame.Rect(enemy.x, enemy.y, 80, 100)
                 if enemy_rect.collidepoint(pos):
@@ -68,7 +68,7 @@ class InputHandler:
                     action_id = self.scene.deck_manager.hand[i]
                     action = ACTIONS[action_id]
                     can_afford = self.scene.player.current_mana >= action.get("cost", 0)
-                    if i not in self.scene.used_card_indices and can_afford:
+                    if can_afford:
                         self.scene.hovered_card_index = i
                     return
 
@@ -85,7 +85,7 @@ class InputHandler:
             return
 
         # 敵のクリック判定
-        for i, enemy in enumerate(self.scene.enemies):
+        for i, enemy in enumerate(self.scene.enemy_manager.enemies):
             if enemy.is_alive:
                 enemy_rect = pygame.Rect(enemy.x, enemy.y, 80, 100)
                 if enemy_rect.collidepoint(pos):
