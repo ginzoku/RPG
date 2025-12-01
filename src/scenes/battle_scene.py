@@ -95,6 +95,9 @@ class BattleScene:
     def end_player_turn(self):
         self.turn = "enemy"
         self.add_log("プレイヤーのターン終了")
+        # 敵の防御値をリセット
+        for enemy in self.enemy_manager.enemies:
+            enemy.defense_buff = 0
         self.player.decrement_status_effects() # プレイヤーのターン終了処理
         self.deck_manager.discard_hand()
         self.hovered_card_index = None
@@ -149,6 +152,10 @@ class BattleScene:
                 for enemy in self.enemy_manager.enemies:
                     enemy.decide_next_action()
                     enemy.decrement_status_effects()
+                
+                # プレイヤーの防御値をリセット
+                self.player.defense_buff = 0
+                
                 self.turn = "player"
                 self.player.decrement_status_effects()
                 if not self.deck_manager.draw_cards(5): self.add_log("山札がありません！")
