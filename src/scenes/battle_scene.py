@@ -35,8 +35,7 @@ class BattleScene:
         self.hovered_relic_index: int | None = None
         self.targeted_enemy_index: int | None = None # 現在選択されている敵のインデックス
 
-        initial_deck = (["slash"] * 5) + (["guard"] * 5) + (["fire_ball"] * 1) + (["expose_weakness"] * 2) + (["healing_light"] * 1) + (["draw_card"] * 1) + ["obliterate"]
-        self.deck_manager = DeckManager(initial_deck)
+        self.deck_manager = DeckManager()
         self.deck_manager.draw_cards(5)
 
         # レリックの初期化と効果の適用
