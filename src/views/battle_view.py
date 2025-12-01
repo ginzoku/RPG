@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 import pygame
 import os
+import time
 from ..components.monster import Monster
 from ..config import settings
 from ..scenes.battle_scene import BattleScene
 from ..components.character import Character
 from .drawers.character_status_drawer import CharacterStatusDrawer
-from .drawers.player_command_drawer import PlayerCommandDrawer
+from .drawers.player_command_drawer import PlayerCommandDrawer # 既存の行
+from .drawers.damage_indicator import DamageIndicator # インポートパスを修正
 from .drawers.relic_drawer import RelicDrawer
 
 class BattleView:
@@ -18,6 +20,8 @@ class BattleView:
         self.status_drawer = CharacterStatusDrawer(self.fonts)
         self.command_drawer = PlayerCommandDrawer(self.fonts)
         self.relic_drawer = RelicDrawer(self.fonts)
+        self.damage_animations = []
+        self.last_known_hp = {}
 
     def _get_japanese_font(self, size: int) -> pygame.font.Font:
         font_paths = [
@@ -42,15 +46,50 @@ class BattleView:
     def draw(self, battle_state: BattleScene):
         self.screen.fill(settings.BLACK)
         
+        # ダメージアニメーションの生成
+        self._check_for_damage(battle_state.player)
+        for enemy in battle_state.enemy_manager.enemies:
+            self._check_for_damage(enemy)
+
         self.status_drawer.draw(self.screen, battle_state.player, settings.BLUE, False)
         for i, enemy in enumerate(battle_state.enemy_manager.enemies):
             if enemy.is_alive:
                 is_selected = (i == battle_state.targeted_enemy_index)
                 self.status_drawer.draw(self.screen, enemy, settings.RED, is_selected)
+        
         self.relic_drawer.draw(self.screen, battle_state)
         self._draw_ui(battle_state)
         
+        # ダメージアニメーションの更新と描画
+        self._update_and_draw_animations()
+
         pygame.display.flip()
+
+    def _check_for_damage(self, character: Character):
+        char_id = id(character)
+        current_hp = character.current_hp
+        
+        if char_id not in self.last_known_hp:
+            self.last_known_hp[char_id] = current_hp
+            return
+
+        last_hp = self.last_known_hp[char_id]
+        if current_hp < last_hp:
+            damage = last_hp - current_hp
+            # CharacterStatusDrawerで定義されているキャラクターの幅(80)を使用
+            pos = (character.x + 80 // 2, character.y) 
+            color = settings.DAMAGE_RED
+            font = self.fonts["medium"]
+            self.damage_animations.append(DamageIndicator(str(damage), pos, color, font))
+
+        self.last_known_hp[char_id] = current_hp
+
+    def _update_and_draw_animations(self):
+        # 生きているアニメーションのみを保持
+        self.damage_animations = [anim for anim in self.damage_animations if anim.is_alive]
+        for anim in self.damage_animations:
+            anim.update()
+            anim.draw(self.screen)
 
     def _draw_ui(self, battle_state: BattleScene):
         if battle_state.turn == "player":
