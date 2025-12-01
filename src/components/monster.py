@@ -8,6 +8,11 @@ class Monster(Character):
         super().__init__(name, max_hp, 0, attack_power, x, y)
         self.actions = actions
         self.next_action: str | None = None
+        
+        # アニメーション用属性
+        self.is_animating: bool = False
+        self.animation_start_time: int = 0
+        self.original_x: int = x
 
     def choose_action(self) -> str:
         """行動パターンからランダムに行動を一つ選択する"""

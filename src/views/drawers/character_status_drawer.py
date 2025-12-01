@@ -10,12 +10,27 @@ class CharacterStatusDrawer:
     def __init__(self, fonts: dict):
         self.fonts = fonts
 
-    def draw(self, screen: pygame.Surface, character: Character, color: tuple[int, int, int]):
+    def draw(self, screen: pygame.Surface, character: Character, color: tuple[int, int, int], is_selected_target: bool = False):
+        """キャラクターのステータス全体を描画するメインメソッド"""
         char_width = 80
         char_height = 100
         
+        # キャラクター本体の四角形を描画
         pygame.draw.rect(screen, color, (character.x, character.y, char_width, char_height))
-        pygame.draw.rect(screen, settings.WHITE, (character.x, character.y, char_width, char_height), 2)
+        
+        # --- 枠線の描画ロジック ---
+        # ターゲット選択中にマウスホバーされている場合のハイライト
+        border_color = settings.WHITE
+        border_width = 2
+        if hasattr(character, 'is_targeted') and character.is_targeted:
+            border_color = settings.YELLOW
+            border_width = 4
+        
+        # ターゲットとして選択されている場合のハイライト (ホバーより優先)
+        if is_selected_target:
+            border_color = settings.YELLOW
+            border_width = 4
+        pygame.draw.rect(screen, border_color, (character.x, character.y, char_width, char_height), border_width)
         
         name_text = self.fonts["medium"].render(character.name, True, settings.WHITE)
         screen.blit(name_text, (character.x - 20, character.y - 40))

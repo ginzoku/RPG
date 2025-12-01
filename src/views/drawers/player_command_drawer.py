@@ -157,7 +157,6 @@ class PlayerCommandDrawer:
                 pos[0] += word_width + space_width
             pos[0] = rect.left
             pos[1] += word_height
-            self._draw_power_circle(screen, power, card_rect, settings.BLUE)
 
     def _draw_power_circle(self, screen: pygame.Surface, power: int, card_rect: pygame.Rect, color: tuple, power_circle_radius: int = 16):
         power_circle_center = (card_rect.right - power_circle_radius - 5, card_rect.bottom - power_circle_radius - 5)

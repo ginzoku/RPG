@@ -42,8 +42,11 @@ class BattleView:
     def draw(self, battle_state: BattleScene):
         self.screen.fill(settings.BLACK)
         
-        self.status_drawer.draw(self.screen, battle_state.player, settings.BLUE)
-        self.status_drawer.draw(self.screen, battle_state.enemy, settings.RED)
+        self.status_drawer.draw(self.screen, battle_state.player, settings.BLUE, False)
+        for i, enemy in enumerate(battle_state.enemies):
+            if enemy.is_alive:
+                is_selected = (i == battle_state.targeted_enemy_index)
+                self.status_drawer.draw(self.screen, enemy, settings.RED, is_selected)
         self.relic_drawer.draw(self.screen, battle_state)
         self._draw_ui(battle_state)
         
