@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pygame
-from ..components.enemy_symbol import EnemySymbol
+from ...components.enemy_symbol import EnemySymbol
 
 class MapScene:
     """マップの状態を管理するクラス"""

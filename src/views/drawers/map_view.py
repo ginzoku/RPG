@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import pygame
-from ..config import settings
-from ..scenes.map_scene import MapScene
+from ...config import settings
+from .map_scene import MapScene
 
 class MapView:
     """マップを描画するクラス"""
