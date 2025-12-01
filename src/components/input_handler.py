@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 import pygame
 import math
+from typing import TYPE_CHECKING
+
 from ..config import settings
 from ..data.action_data import ACTIONS
 
+if TYPE_CHECKING:
+    from ..scenes.battle_scene import BattleScene
+
 class InputHandler:
-    def __init__(self, battle_scene: "BattleScene"): # 型ヒントを文字列で前方参照にする
+    def __init__(self, battle_scene: "BattleScene"):
         self.scene = battle_scene
 
     def process_event(self, event: pygame.event.Event):

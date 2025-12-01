@@ -18,5 +18,14 @@ ENEMY_GROUPS = {
     "goblin_and_slime": [
         {"id": "goblin", "pos_index": 0},
         {"id": "slime", "pos_index": 1},
+    ],
+    "goblin_duo": [
+        {"id": "goblin", "pos_index": 0},
+        {"id": "goblin", "pos_index": 1},
+    ],
+    "slime_trio": [
+        {"id": "slime", "pos_index": 0},
+        {"id": "slime", "pos_index": 1},
+        {"id": "slime", "pos_index": 2},
     ]
 }

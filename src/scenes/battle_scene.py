@@ -15,12 +15,12 @@ from ..data.enemy_group_data import ENEMY_GROUPS, ENEMY_POSITIONS
 from ..config import settings
 
 class BattleScene:
-    def __init__(self):
-        self.reset("two_slimes") # デフォルトの敵グループで初期化 (IDを修正)
+    def __init__(self, player: Character):
+        self.player = player
+        self.reset("goblin_duo") # デフォルトの敵グループで初期化
 
     def reset(self, enemy_group_id: str):
-        # プレイヤーと敵の初期化
-        self.player = Character("勇者", max_hp=100, max_mp=3, attack_power=0, x=150, y=settings.SCREEN_HEIGHT // 2 - 100)
+        # 敵の初期化
         self.enemy_manager = EnemyManager(self.player)
         self.enemy_manager.setup_enemies(enemy_group_id)
         self.input_handler = InputHandler(self)
@@ -34,18 +34,11 @@ class BattleScene:
         self.hovered_card_index: int | None = None
         self.hovered_relic_index: int | None = None
         self.targeted_enemy_index: int | None = None # 現在選択されている敵のインデックス
-
+        
+        # プレイヤーの戦闘開始時の状態リセット
+        self.player.reset_for_battle()
         self.deck_manager = DeckManager()
         self.deck_manager.draw_cards(5)
-
-        # レリックの初期化と効果の適用
-        self.player.relics.append("red_stone")
-        for relic_id in self.player.relics:
-            relic_data = RELICS.get(relic_id)
-            if relic_data and "effects" in relic_data:
-                for effect in relic_data["effects"]:
-                    if effect["type"] == "stat_change" and effect["stat"] == "attack_power":
-                        self.player.attack_power += effect["value"]
 
         # バトル開始時に一番左の敵をデフォルトターゲットに設定
         first_living_enemy_index = next((i for i, e in enumerate(self.enemy_manager.enemies) if e.is_alive), None)

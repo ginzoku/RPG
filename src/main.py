@@ -2,6 +2,7 @@
 import pygame
 import sys # sysをインポート
 from .config import settings
+from .components.character import Character
 from .scenes.map_scene import MapScene
 from .views.map_view import MapView
 from .controllers.map_controller import MapController
@@ -13,14 +14,17 @@ class GameController:
         pygame.init()
         self.screen = pygame.display.set_mode((settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
-        
+
+        # ゲーム全体で共有するプレイヤーオブジェクトを生成
+        self.player = Character("勇者", max_hp=100, max_mp=3, attack_power=0, x=150, y=settings.SCREEN_HEIGHT // 2 - 100, max_sanity=100)
+
         self.game_state = "map"  # 初期状態をマップに
         
         # シーンとビューの初期化
         self.map_scene = MapScene()
         self.map_view = MapView(self.screen)
         self.map_controller = MapController()
-        self.battle_scene = BattleScene()
+        self.battle_scene = BattleScene(self.player) # プレイヤーオブジェクトを渡す
         self.battle_view = BattleView() # 修正: 重複していた行を削除
         self.running = True
 

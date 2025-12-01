@@ -41,16 +41,21 @@ class CharacterStatusDrawer:
         # --- UI要素のY座標を整理 ---
         base_y = character.y + char_height + 5
         hp_bar_y = base_y + 30  # HPテキストとHPバーの間隔
-        mana_orbs_y = hp_bar_y + 30 # HPバーとマナの間隔
+        sanity_bar_y = hp_bar_y + 30 # HPバーと正気度バーの間隔
+        mana_orbs_y = sanity_bar_y + 30 # 正気度バーとマナの間隔
         status_effects_y = mana_orbs_y + 30 # マナと状態異常の間隔
 
-        # プレイヤーの場合のみマナオーブを描画
-        if character.max_mana > 0:
+        self._draw_hp_bar(screen, character, character.x - 10, hp_bar_y, 100, 15)
+        self._draw_defense_buff(screen, character, character.x - 10, hp_bar_y)
+
+        # プレイヤーの場合のみ正気度とマナを描画 (マナの有無で判定)
+        if character.max_mana > 0 and character.max_sanity is not None:
+            san_text = self.fonts["small"].render(f"SAN: {character.current_sanity}/{character.max_sanity}", True, settings.WHITE)
+            screen.blit(san_text, (character.x - 10, hp_bar_y + 5))
+            self._draw_sanity_bar(screen, character, character.x - 10, sanity_bar_y, 100, 15)
             self._draw_mana_orbs(screen, character, character.x - 10, mana_orbs_y)
 
         self._draw_status_effects(screen, character, character.x - 10, status_effects_y)
-        self._draw_hp_bar(screen, character, character.x - 10, hp_bar_y, 100, 15)
-        self._draw_defense_buff(screen, character, character.x - 10, hp_bar_y)
 
         # 敵の場合のみインテントを描画
         if hasattr(character, 'next_action') and character.next_action:
@@ -74,6 +79,13 @@ class CharacterStatusDrawer:
         elif hp_percentage > 25: bar_color = settings.YELLOW
         
         pygame.draw.rect(screen, bar_color, (x, y, hp_bar_width, height))
+        pygame.draw.rect(screen, settings.WHITE, (x, y, width, height), 1)
+
+    def _draw_sanity_bar(self, screen: pygame.Surface, character: Character, x: int, y: int, width: int, height: int):
+        pygame.draw.rect(screen, settings.DARK_GRAY, (x, y, width, height))
+        sanity_percentage = character.get_sanity_percentage() if character.current_sanity is not None else 0
+        sanity_bar_width = (width * sanity_percentage) / 100
+        pygame.draw.rect(screen, settings.YELLOW, (x, y, sanity_bar_width, height))
         pygame.draw.rect(screen, settings.WHITE, (x, y, width, height), 1)
 
     def _draw_defense_buff(self, screen: pygame.Surface, character: Character, x: int, y: int):

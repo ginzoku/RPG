@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
 import math
+from ..data.relic_data import RELICS
 from ..data.status_effect_data import STATUS_EFFECTS
 
 class Character:
-    def __init__(self, name: str, max_hp: int, max_mp: int, attack_power: int, x: int, y: int):
+    def __init__(self, name: str, max_hp: int, max_mp: int, attack_power: int, x: int, y: int, max_sanity: int | None = None):
         self.name: str = name
         self.max_hp: int = max_hp
         self.current_hp: int = max_hp
         self.max_mana: int = max_mp
         self.current_mana: int = max_mp
+        self.max_sanity: int | None = max_sanity
+        self.current_sanity: int | None = max_sanity
         self.attack_power: int = attack_power
         self.defense_power: int = 0
         self.x: int = x
@@ -16,8 +19,19 @@ class Character:
         self.is_alive: bool = True
         self.defense_buff: int = 0 # 防御によるダメージ減少量
         self.status_effects: dict[str, int] = {} # key: status_id, value: turns
-        self.relics: list[str] = []
+        self.relics: list[str] = ["red_stone"] # 初期レリック
         self.is_targeted: bool = False # ターゲット選択時にハイライトするためのフラグ
+
+        # レリックの効果を初期適用
+        self._apply_initial_relic_effects()
+
+    def _apply_initial_relic_effects(self):
+        for relic_id in self.relics:
+            relic_data = RELICS.get(relic_id)
+            if relic_data and "effects" in relic_data:
+                for effect in relic_data["effects"]:
+                    if effect["type"] == "stat_change" and effect["stat"] == "attack_power":
+                        self.attack_power += effect["value"]
     
     def take_damage(self, damage: int):
         # 被ダメージ修飾子を持つ状態異常を適用
@@ -76,3 +90,13 @@ class Character:
     def get_mp_percentage(self) -> float:
         if self.max_mana == 0: return 0
         return (self.current_mana / self.max_mana) * 100
+
+    def get_sanity_percentage(self) -> float:
+        if self.max_sanity is None or self.max_sanity == 0: return 0
+        return (self.current_sanity / self.max_sanity) * 100
+
+    def reset_for_battle(self):
+        """戦闘開始時にプレイヤーの状態をリセットする"""
+        self.fully_recover_mana()
+        self.defense_buff = 0
+        self.status_effects.clear()
