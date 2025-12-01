@@ -38,7 +38,7 @@ class ActionHandler:
         
         elif action_type == "skill":
             if action_id == "guard":
-                player.defense_buff = action["power"]
+                player.defense_buff += action["power"]
                 log.append(f"{player.name}は防御の構えをとった！")
             elif "effect" in action:
                 # スキルの対象を決定 (デフォルトは敵)

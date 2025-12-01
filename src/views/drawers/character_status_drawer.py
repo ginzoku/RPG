@@ -50,6 +50,7 @@ class CharacterStatusDrawer:
 
         self._draw_status_effects(screen, character, character.x - 10, status_effects_y)
         self._draw_hp_bar(screen, character, character.x - 10, hp_bar_y, 100, 15)
+        self._draw_defense_buff(screen, character, character.x - 10, hp_bar_y)
 
         # 敵の場合のみインテントを描画
         if hasattr(character, 'next_action') and character.next_action:
@@ -74,6 +75,21 @@ class CharacterStatusDrawer:
         
         pygame.draw.rect(screen, bar_color, (x, y, hp_bar_width, height))
         pygame.draw.rect(screen, settings.WHITE, (x, y, width, height), 1)
+
+    def _draw_defense_buff(self, screen: pygame.Surface, character: Character, x: int, y: int):
+        if character.defense_buff > 0:
+            radius = 15
+            circle_x = x + 100 + radius + 5  # HPバーの右側に配置
+            circle_y = y + 7 # HPバーの高さの中心に合わせる
+            
+            # 白い丸
+            pygame.draw.circle(screen, settings.WHITE, (circle_x, circle_y), radius)
+            
+            # 黒い文字
+            font = self.fonts["small"]
+            text = font.render(str(character.defense_buff), True, settings.BLACK)
+            text_rect = text.get_rect(center=(circle_x, circle_y))
+            screen.blit(text, text_rect)
 
     def _draw_mana_orbs(self, screen: pygame.Surface, character: Character, x: int, y: int):
         orb_radius = 10
