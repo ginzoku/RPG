@@ -55,5 +55,12 @@ ACTIONS = {
         "power": 3, # 3ターン付与
         "cost": 2,
         "description": "自分に「再生」を{power}ターン付与する。\n(ターン終了時にHPが5回復)",
+    },
+    "draw_card": {
+        "name": "ドロー",
+        "type": "skill",
+        "power": 2, # 2枚ドロー
+        "cost": 1,
+        "description": "カードを{power}枚引く。",
     }
 }

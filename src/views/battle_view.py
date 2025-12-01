@@ -93,10 +93,10 @@ class BattleView:
             discard_count = len(battle_state.deck_manager.discard_pile) if battle_state.deck_manager else 0
             
             deck_text = self.fonts["small"].render(f"山札: {deck_count}", True, settings.WHITE)
-            self.screen.blit(deck_text, (log_area_rect.left + 20, log_area_rect.top - 40))
+            self.screen.blit(deck_text, (20, settings.SCREEN_HEIGHT - 40))
 
             discard_text = self.fonts["small"].render(f"捨て札: {discard_count}", True, settings.WHITE)
-            discard_rect = discard_text.get_rect(right=log_area_rect.right - 20, top=log_area_rect.top - 40)
+            discard_rect = discard_text.get_rect(right=settings.SCREEN_WIDTH - 20, bottom=settings.SCREEN_HEIGHT - 20)
             self.screen.blit(discard_text, discard_rect)
 
         # プレイヤーのターンならコマンドを描画

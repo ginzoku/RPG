@@ -2,13 +2,14 @@
 import math
 import random
 from .character import Character
+from .deck_manager import DeckManager
 from ..data.action_data import ACTIONS
 from ..data.monster_action_data import MONSTER_ACTIONS
 from ..data.status_effect_data import STATUS_EFFECTS
 
 class ActionHandler:
     @staticmethod
-    def execute_player_action(player: Character, enemy: Character, action_id: str) -> list[str]:
+    def execute_player_action(player: Character, enemy: Character, action_id: str, deck_manager: DeckManager) -> list[str]:
         action = ACTIONS[action_id]
         log = []
 
@@ -53,6 +54,9 @@ class ActionHandler:
                 target_character.apply_status(status_id, turns)
                 status_name = STATUS_EFFECTS[status_id]["name"]
                 log.append(f"{target_name}は{status_name}になった！")
+            elif action_id == "draw_card":
+                num_to_draw = action.get("power", 1)
+                deck_manager.draw_cards(num_to_draw)
 
         return log
 

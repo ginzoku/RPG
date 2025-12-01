@@ -32,8 +32,8 @@ class CharacterStatusDrawer:
             border_width = 4
         pygame.draw.rect(screen, border_color, (character.x, character.y, char_width, char_height), border_width)
         
-        name_text = self.fonts["medium"].render(character.name, True, settings.WHITE)
-        screen.blit(name_text, (character.x - 20, character.y - 40))
+        # name_text = self.fonts["medium"].render(character.name, True, settings.WHITE)
+        # screen.blit(name_text, (character.x - 20, character.y - 40))
         
         hp_text = self.fonts["small"].render(f"HP: {character.current_hp}/{character.max_hp}", True, settings.WHITE)
         screen.blit(hp_text, (character.x - 10, character.y + char_height + 5))

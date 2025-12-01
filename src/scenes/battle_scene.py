@@ -53,7 +53,7 @@ class BattleScene:
         self.acting_enemy_index: int = 0
         self.animation_duration: int = 400 # 0.4秒
 
-        initial_deck = (["slash"] * 6) + (["guard"] * 5) + (["fire_ball"] * 1) + (["expose_weakness"] * 2) + (["healing_light"] * 1)
+        initial_deck = (["slash"] * 5) + (["guard"] * 5) + (["fire_ball"] * 1) + (["expose_weakness"] * 2) + (["healing_light"] * 1) + (["draw_card"] * 1)
         self.deck_manager = DeckManager(initial_deck)
         self.deck_manager.draw_cards(5)
         
@@ -213,8 +213,9 @@ class BattleScene:
                     # 攻撃カードの場合、ターゲットが必要
                     if action["type"] == "attack":
                         if target_enemy:
-                            log_messages = ActionHandler.execute_player_action(self.player, target_enemy, action_id)
-                            for msg in log_messages: self.add_log(msg)
+                            log_messages = ActionHandler.execute_player_action(self.player, target_enemy, action_id, self.deck_manager)
+                            for msg in log_messages:
+                                self.add_log(msg)
                             self.used_card_indices.add(card_index)
                             self._update_target_after_enemy_death() # ターゲット更新処理を呼び出す
                         else:
@@ -222,11 +223,11 @@ class BattleScene:
                             return
                     # 攻撃以外（スキルなど）なら即時実行
                     else:
-                        # ターゲットが不要なスキルでも、execute_player_actionはターゲット引数を必要とする
                         dummy_target = target_enemy or next((e for e in self.enemies if e.is_alive), None)
                         if dummy_target:
-                            log_messages = ActionHandler.execute_player_action(self.player, dummy_target, action_id)
-                            for msg in log_messages: self.add_log(msg)
+                            log_messages = ActionHandler.execute_player_action(self.player, dummy_target, action_id, self.deck_manager)
+                            for msg in log_messages:
+                                self.add_log(msg)
                         self.used_card_indices.add(card_index)
                         self._update_target_after_enemy_death() # ターゲット更新処理を呼び出す
 

@@ -24,8 +24,13 @@ class DeckManager:
                 self.discard_pile = []
                 random.shuffle(self.deck)
             
-            self.hand.append(self.deck.pop())
-            drew_any = True
+            drawn_card = self.deck.pop()
+            if len(self.hand) < 10: # 手札上限チェック
+                self.hand.append(drawn_card)
+                drew_any = True
+            else:
+                # 手札が上限に達している場合は捨て札に送る
+                self.discard_pile.append(drawn_card)
         return drew_any
 
     def discard_hand(self):
