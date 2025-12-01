@@ -62,5 +62,14 @@ ACTIONS = {
         "power": 2, # 2枚ドロー
         "cost": 1,
         "description": "カードを{power}枚引く。",
+    },
+    "obliterate": {
+        "name": "消滅",
+        "type": "attack",
+        "damage_type": "physical",
+        "power": 30,
+        "cost": 3,
+        "exhaust": True,
+        "description": "敵に{power}の物理ダメージを与える。このカードは廃棄される。"
     }
 }

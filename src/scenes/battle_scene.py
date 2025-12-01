@@ -35,7 +35,7 @@ class BattleScene:
         self.hovered_relic_index: int | None = None
         self.targeted_enemy_index: int | None = None # 現在選択されている敵のインデックス
 
-        initial_deck = (["slash"] * 5) + (["guard"] * 5) + (["fire_ball"] * 1) + (["expose_weakness"] * 2) + (["healing_light"] * 1) + (["draw_card"] * 1)
+        initial_deck = (["slash"] * 5) + (["guard"] * 5) + (["fire_ball"] * 1) + (["expose_weakness"] * 2) + (["healing_light"] * 1) + (["draw_card"] * 1) + ["obliterate"]
         self.deck_manager = DeckManager(initial_deck)
         self.deck_manager.draw_cards(5)
 
@@ -130,7 +130,7 @@ class BattleScene:
 
         for msg in log_messages:
             self.add_log(msg)
-        self.deck_manager.move_used_card_to_discard(card_index)
+        self.deck_manager.move_used_card(card_index)
         self.hovered_card_index = None # ホバー状態をリセット
         self._update_target_after_enemy_death()
         self._check_game_over()

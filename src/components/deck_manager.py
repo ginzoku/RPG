@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 import random
+from ..data.action_data import ACTIONS
 
 class DeckManager:
     def __init__(self, initial_deck: list[str]):
         self.deck: list[str] = initial_deck[:]
         self.hand: list[str] = []
         self.discard_pile: list[str] = []
+        self.exhaust_pile: list[str] = []
         random.shuffle(self.deck)
 
     def draw_cards(self, num_to_draw: int) -> bool:
@@ -38,8 +40,12 @@ class DeckManager:
         self.discard_pile.extend(self.hand)
         self.hand = []
 
-    def move_used_card_to_discard(self, card_index: int):
-        """使用したカードを手札から捨て札に移動する"""
+    def move_used_card(self, card_index: int):
+        """使用したカードを手札から適切な場所に移動する（捨て札 or 廃棄）"""
         if 0 <= card_index < len(self.hand):
-            card = self.hand.pop(card_index)
-            self.discard_pile.append(card)
+            card_id = self.hand.pop(card_index)
+            action_data = ACTIONS.get(card_id)
+            if action_data and action_data.get("exhaust", False):
+                self.exhaust_pile.append(card_id)
+            else:
+                self.discard_pile.append(card_id)
