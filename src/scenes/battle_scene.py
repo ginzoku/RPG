@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import pygame
+import math
 import random
 from ..components.character import Character
 from ..components.monster import Monster
@@ -8,6 +9,7 @@ from ..components.deck_manager import DeckManager
 from ..components.action_handler import ActionHandler
 from ..components.input_handler import InputHandler
 from ..data.monster_data import MONSTERS
+from ..data.monster_action_data import MONSTER_ACTIONS
 from ..data.relic_data import RELICS
 from ..data.enemy_group_data import ENEMY_GROUPS, ENEMY_POSITIONS
 from ..config import settings
@@ -177,36 +179,49 @@ class BattleScene:
                     return
 
                 if not enemy.is_animating:
-                    # アニメーション開始
+                    # 行動を実行し、アニメーションを開始する
+                    action_id = enemy.next_action or enemy.choose_action()
+                    action_data = MONSTER_ACTIONS.get(action_id, {})
+                    intent_type = action_data.get("intent_type", "unknown")
+
+                    # 行動の実行
+                    log_messages = ActionHandler.execute_monster_action(enemy, self.player, action_id)
+                    for msg in log_messages: self.add_log(msg)
+                    self._check_game_over()
+
+                    # アニメーションタイプの決定
+                    if intent_type in ["attack", "attack_debuff"]:
+                        enemy.animation_type = "attack"
+                    else:
+                        enemy.animation_type = "shake"
+
                     enemy.is_animating = True
                     enemy.animation_start_time = pygame.time.get_ticks()
                 else:
                     # アニメーション更新
                     elapsed_time = pygame.time.get_ticks() - enemy.animation_start_time
-                    half_duration = self.animation_duration / 2
 
-                    if elapsed_time < half_duration:
-                        # 左へスライド
-                        progress = elapsed_time / half_duration
-                        enemy.x = enemy.original_x - 50 * progress
-                    elif elapsed_time < self.animation_duration:
-                        # 右へスライド（元の位置へ）
-                        progress = (elapsed_time - half_duration) / half_duration
-                        enemy.x = (enemy.original_x - 50) + 50 * progress
+                    if elapsed_time < self.animation_duration:
+                        if enemy.animation_type == "attack":
+                            # 攻撃アニメーション（左へスライドして戻る）
+                            half_duration = self.animation_duration / 2
+                            if elapsed_time < half_duration:
+                                progress = elapsed_time / half_duration
+                                enemy.x = enemy.original_x - 50 * progress
+                            else:
+                                progress = (elapsed_time - half_duration) / half_duration
+                                enemy.x = (enemy.original_x - 50) + 50 * progress
+                        elif enemy.animation_type == "shake":
+                            # シェイクアニメーション（左右に細かく振動）
+                            progress = elapsed_time / self.animation_duration
+                            shake_offset = math.sin(progress * math.pi * 4) * 10 # 4回振動、振幅10px
+                            enemy.x = enemy.original_x + shake_offset
                     else:
                         # アニメーション終了
                         enemy.is_animating = False
                         enemy.x = enemy.original_x
+                        enemy.animation_type = None
                         self.acting_enemy_index += 1 # 次の敵へ
-
-                    # アニメーションのピークでダメージ処理
-                    if half_duration - 20 < elapsed_time < half_duration + 20:
-                         if not hasattr(enemy, 'action_executed_this_turn') or not enemy.action_executed_this_turn:
-                            action_id = enemy.next_action or enemy.choose_action()
-                            log_messages = ActionHandler.execute_monster_action(enemy, self.player, action_id)
-                            for msg in log_messages: self.add_log(msg)
-                            self._check_game_over()
-                            enemy.action_executed_this_turn = True
 
             elif self.enemy_turn_state == "finished":
                 # 全ての敵の行動が終わったらプレイヤーのターンへ

@@ -13,6 +13,7 @@ class Monster(Character):
         self.is_animating: bool = False
         self.animation_start_time: int = 0
         self.original_x: int = x
+        self.animation_type: str | None = None # 'attack' or 'shake'
 
     def choose_action(self) -> str:
         """行動パターンからランダムに行動を一つ選択する"""
