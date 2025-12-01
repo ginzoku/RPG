@@ -15,6 +15,7 @@ class Character:
         self.is_alive: bool = True
         self.defense_buff: int = 0 # 防御によるダメージ減少量
         self.status_effects: dict[str, int] = {} # key: status_id, value: turns
+        self.relics: list[str] = []
     
     def take_damage(self, damage: int):
         # 被ダメージ修飾子を持つ状態異常を適用

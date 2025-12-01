@@ -7,6 +7,7 @@ from ..data.action_data import ACTIONS
 from ..components.deck_manager import DeckManager
 from ..components.action_handler import ActionHandler
 from ..data.monster_data import MONSTERS
+from ..data.relic_data import RELICS
 from ..config import settings
 
 class BattleScene:
@@ -32,11 +33,22 @@ class BattleScene:
         self.winner = None
         self.used_card_indices: set[int] = set()
         self.hovered_card_index: int | None = None
+        self.hovered_relic_index: int | None = None
 
         initial_deck = (["slash"] * 6) + (["guard"] * 5) + (["fire_ball"] * 1) + (["expose_weakness"] * 2) + (["healing_light"] * 1)
         self.deck_manager = DeckManager(initial_deck)
         self.deck_manager.draw_cards(5)
         self.enemy.decide_next_action() # 最初のインテントを決定
+
+        # レリックの初期化と効果の適用
+        self.player.relics.append("red_stone")
+        for relic_id in self.player.relics:
+            relic_data = RELICS.get(relic_id)
+            if relic_data and "effects" in relic_data:
+                for effect in relic_data["effects"]:
+                    if effect["type"] == "stat_change" and effect["stat"] == "attack_power":
+                        self.player.attack_power += effect["value"]
+
         self.add_log("戦闘開始！")
 
     def add_log(self, message: str):
@@ -77,6 +89,17 @@ class BattleScene:
             # --- MOUSEMOTIONでホバー状態を更新 ---
             if event.type == pygame.MOUSEMOTION:
                 self.hovered_card_index = None # いったんリセット
+                self.hovered_relic_index = None # レリックもリセット
+
+                # レリックのホバー判定
+                from ..views.drawers.relic_drawer import RelicDrawer # 循環インポートを避けるためここでインポート
+                relic_drawer = RelicDrawer({}) # フォントは不要なので空辞書
+                for i, relic_id in enumerate(self.player.relics):
+                    relic_rect = relic_drawer.get_relic_rect(i)
+                    if relic_rect.collidepoint(event.pos):
+                        self.hovered_relic_index = i
+                        break
+
                 
                 num_commands = len(self.deck_manager.hand)
                 if num_commands > 0:

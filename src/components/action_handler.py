@@ -25,7 +25,7 @@ class ActionHandler:
                 base_power = action["power"]
                 if "weak" in player.status_effects:
                     base_power = math.ceil(base_power * STATUS_EFFECTS["weak"]["value"])
-                base_damage = base_power
+                base_damage = base_power + player.attack_power # attack_powerを加算
                 damage_variance = random.randint(-int(base_damage * 0.1), int(base_damage * 0.1))
                 damage = max(1, base_damage + damage_variance)
                 actual_damage = enemy.take_damage(damage)
@@ -72,3 +72,30 @@ class ActionHandler:
                 log.append(f"{player.name}は{STATUS_EFFECTS[action_data['effect']]['name']}になった！")
         
         return log
+
+    @staticmethod
+    def get_card_display_power(player: Character, action_id: str) -> int | None:
+        """
+        カードに表示するための最終的な威力/防御値を計算する。
+        表示する値がない場合はNoneを返す。
+        """
+        action = ACTIONS.get(action_id)
+        if not action:
+            return None
+
+        action_type = action.get("type")
+        power = action.get("power")
+
+        if action_type == "attack":
+            base_power = power
+            if action.get("damage_type") == "physical":
+                base_power += player.attack_power
+            
+            if "weak" in player.status_effects:
+                base_power = math.ceil(base_power * STATUS_EFFECTS["weak"]["value"])
+            
+            return base_power
+        elif action_id == "guard": # "防御"カード
+            return power
+        
+        return None

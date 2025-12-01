@@ -7,6 +7,7 @@ from ..scenes.battle_scene import BattleScene
 from ..components.character import Character
 from .drawers.character_status_drawer import CharacterStatusDrawer
 from .drawers.player_command_drawer import PlayerCommandDrawer
+from .drawers.relic_drawer import RelicDrawer
 
 class BattleView:
     def __init__(self):
@@ -16,6 +17,7 @@ class BattleView:
         self.fonts = self._load_fonts()
         self.status_drawer = CharacterStatusDrawer(self.fonts)
         self.command_drawer = PlayerCommandDrawer(self.fonts)
+        self.relic_drawer = RelicDrawer(self.fonts)
 
     def _get_japanese_font(self, size: int) -> pygame.font.Font:
         font_paths = [
@@ -42,6 +44,7 @@ class BattleView:
         
         self.status_drawer.draw(self.screen, battle_state.player, settings.BLUE)
         self.status_drawer.draw(self.screen, battle_state.enemy, settings.RED)
+        self.relic_drawer.draw(self.screen, battle_state)
         self._draw_ui(battle_state)
         
         pygame.display.flip()
