@@ -154,7 +154,7 @@ class BattleView:
             result_rect = result_text.get_rect(center=(settings.SCREEN_WIDTH // 2, settings.SCREEN_HEIGHT // 2 - 100))
             self.screen.blit(result_text, result_rect)
             
-            restart_text = self.fonts["medium"].render("Rキー: リスタート", True, settings.WHITE)
+            restart_text = self.fonts["medium"].render("Rキー: マップに戻る", True, settings.WHITE)
             restart_rect = restart_text.get_rect(center=(settings.SCREEN_WIDTH // 2, settings.SCREEN_HEIGHT // 2 + 50))
             self.screen.blit(restart_text, restart_rect)
 

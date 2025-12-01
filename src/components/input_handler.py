@@ -10,10 +10,7 @@ class InputHandler:
 
     def process_event(self, event: pygame.event.Event):
         """イベントを処理し、適切なハンドラに振り分ける"""
-        if self.scene.game_over:
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
-                self.scene.reset()
-            return
+        if self.scene.game_over: return
 
         if self.scene.turn != "player":
             return

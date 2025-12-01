@@ -16,13 +16,13 @@ from ..config import settings
 
 class BattleScene:
     def __init__(self):
-        self.reset()
+        self.reset("two_slimes") # デフォルトの敵グループで初期化 (IDを修正)
 
-    def reset(self):
+    def reset(self, enemy_group_id: str):
         # プレイヤーと敵の初期化
         self.player = Character("勇者", max_hp=100, max_mp=3, attack_power=0, x=150, y=settings.SCREEN_HEIGHT // 2 - 100)
         self.enemy_manager = EnemyManager(self.player)
-        self.enemy_manager.setup_enemies()
+        self.enemy_manager.setup_enemies(enemy_group_id)
         self.input_handler = InputHandler(self)
         
         # ゲーム状態

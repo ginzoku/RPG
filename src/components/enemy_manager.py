@@ -16,10 +16,11 @@ class EnemyManager:
         self.acting_enemy_index: int = 0
         self.animation_duration: int = 400 # 0.4秒
 
-    def setup_enemies(self):
+    def setup_enemies(self, group_id: str | None = None):
         """敵グループを生成し、初期化する"""
         self.enemies.clear()
-        group_id = random.choice(list(ENEMY_GROUPS.keys()))
+        if group_id is None:
+            group_id = random.choice(list(ENEMY_GROUPS.keys()))
         enemy_group = ENEMY_GROUPS[group_id]
         positions = ENEMY_POSITIONS[len(enemy_group)]
 
