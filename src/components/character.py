@@ -27,9 +27,6 @@ class Character:
         # 防御バフを適用
         actual_damage = damage - self.defense_buff
         actual_damage = max(0, actual_damage) # ダメージがマイナスにならないように
-        
-        # 防御バフは一度使ったらリセット
-        self.defense_buff = 0
 
         self.current_hp -= actual_damage
         if self.current_hp <= 0:
