@@ -1,0 +1,20 @@
+# -*- coding: utf-8 -*-
+import random
+from .character import Character
+
+class Monster(Character):
+    def __init__(self, name: str, max_hp: int, attack_power: int, actions: list[str], x: int, y: int):
+        # モンスターはMPを使わない想定なので max_mp=0 で初期化
+        super().__init__(name, max_hp, 0, attack_power, x, y)
+        self.actions = actions
+        self.next_action: str | None = None
+
+    def choose_action(self) -> str:
+        """行動パターンからランダムに行動を一つ選択する"""
+        if not self.actions:
+            return "wait" # 行動がなければ何もしない
+        return random.choice(self.actions)
+    
+    def decide_next_action(self):
+        """次の行動を決定し、保持する"""
+        self.next_action = self.choose_action()
