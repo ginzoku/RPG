@@ -25,8 +25,10 @@ class Character:
             damage = math.ceil(damage * modifier)
 
         # 防御バフを適用
-        actual_damage = damage - self.defense_buff
-        actual_damage = max(0, actual_damage) # ダメージがマイナスにならないように
+        absorbed_damage = min(self.defense_buff, damage)
+        actual_damage = damage - absorbed_damage
+        
+        self.defense_buff -= absorbed_damage
 
         self.current_hp -= actual_damage
         if self.current_hp <= 0:
