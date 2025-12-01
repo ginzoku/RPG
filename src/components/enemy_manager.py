@@ -2,7 +2,8 @@
 import pygame
 import math
 import random
-from .monster import Monster
+from .character import Character # 修正: Characterクラスを相対インポート
+from .monster import Monster # 既存の行
 from .action_handler import ActionHandler
 from ..data.monster_data import MONSTERS
 from ..data.monster_action_data import MONSTER_ACTIONS
