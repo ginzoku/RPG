@@ -6,6 +6,7 @@ from ..components.monster import Monster
 from ..data.action_data import ACTIONS
 from ..components.deck_manager import DeckManager
 from ..components.action_handler import ActionHandler
+from ..components.input_handler import InputHandler
 from ..data.monster_data import MONSTERS
 from ..data.relic_data import RELICS
 from ..data.enemy_group_data import ENEMY_GROUPS, ENEMY_POSITIONS
@@ -13,6 +14,7 @@ from ..config import settings
 
 class BattleScene:
     def __init__(self):
+        self.input_handler = InputHandler(self)
         self.reset()
 
     def reset(self):
@@ -122,121 +124,40 @@ class BattleScene:
         self.hovered_card_index = None # ホバー状態をリセット
         self.enemy_turn_state = "start" # 敵のターン状態をリセット
 
+    def set_target(self, enemy_index: int):
+        """指定されたインデックスの敵をターゲットに設定する"""
+        self.targeted_enemy_index = enemy_index
+
+    def execute_card_action(self, card_index: int):
+        """指定されたカードのアクションを実行する"""
+        action_id = self.deck_manager.hand[card_index]
+        action = ACTIONS[action_id]
+
+        target_enemy = None
+        if self.targeted_enemy_index is not None and self.enemies[self.targeted_enemy_index].is_alive:
+            target_enemy = self.enemies[self.targeted_enemy_index]
+
+        # 攻撃カードの場合、ターゲットが必要
+        if action["type"] == "attack":
+            if not target_enemy:
+                self.add_log("攻撃対象を選択してください。")
+                return
+            log_messages = ActionHandler.execute_player_action(self.player, target_enemy, action_id, self.deck_manager)
+        # 攻撃以外（スキルなど）なら即時実行
+        else:
+            dummy_target = target_enemy or next((e for e in self.enemies if e.is_alive), None)
+            if not dummy_target: return # 実行対象がいない
+            log_messages = ActionHandler.execute_player_action(self.player, dummy_target, action_id, self.deck_manager)
+
+        for msg in log_messages: self.add_log(msg)
+        self.used_card_indices.add(card_index)
+        self._update_target_after_enemy_death()
+        self._check_game_over()
+        if self.game_over: self.end_player_turn()
+
     def process_input(self, event: pygame.event.Event):
-        # ゲームオーバー時のリスタート処理
-        if self.game_over and event.type == pygame.KEYDOWN and event.key == pygame.K_r:
-            self.reset()
-            return
-
-        # プレイヤーのターン中の入力処理
-        if self.turn == "player" and not self.game_over:            
-            # マウスクリック処理
-            log_area_height = int(settings.SCREEN_HEIGHT / 4)
-            log_area_y = settings.SCREEN_HEIGHT - log_area_height
-
-            # --- MOUSEMOTIONでホバー状態を更新 ---
-            if event.type == pygame.MOUSEMOTION:
-                self.hovered_card_index = None # いったんリセット
-                self.hovered_relic_index = None # レリックもリセット
-
-                # レリックのホバー判定
-                from ..views.drawers.relic_drawer import RelicDrawer # 循環インポートを避けるためここでインポート
-                relic_drawer = RelicDrawer({}) # フォントは不要なので空辞書
-                for i, relic_id in enumerate(self.player.relics):
-                    relic_rect = relic_drawer.get_relic_rect(i)
-                    if relic_rect.collidepoint(event.pos):
-                        self.hovered_relic_index = i
-                        break
-                
-                # 敵のホバー判定
-                for i, enemy in enumerate(self.enemies):
-                    if not enemy.is_alive: continue
-                    enemy_rect = pygame.Rect(enemy.x, enemy.y, 80, 100)
-                    enemy.is_targeted = enemy_rect.collidepoint(event.pos)
-
-                # カードのホバー判定 (ターゲット選択中でない場合)
-                num_commands = len(self.deck_manager.hand)
-                if num_commands > 0:
-                    card_width = 120
-                    card_height = 170
-                    overlap_x = 80
-                    total_width = (num_commands - 1) * overlap_x + card_width
-                    start_x = (settings.SCREEN_WIDTH - total_width) / 2
-                    card_y = settings.SCREEN_HEIGHT - card_height - 10
-
-                    # マウスカーソルがどのカードの上にあるか逆順でチェック（手前のカードを優先）
-                    for i in range(num_commands - 1, -1, -1):
-                        current_card_x = start_x + i * overlap_x
-                        card_rect = pygame.Rect(current_card_x, card_y, card_width, card_height)
-                        # ホバーされているカードは少し上にずれるので、その分も考慮
-                        if self.hovered_card_index == i:
-                            card_rect.y -= 30
-
-                        if card_rect.collidepoint(event.pos):
-                            action_id = self.deck_manager.hand[i]
-                            action = ACTIONS[action_id]
-                            can_afford = self.player.current_mana >= action.get("cost", 0)
-
-                            if i not in self.used_card_indices and can_afford:
-                                self.hovered_card_index = i
-                            break
-
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                # ターン終了ボタンの判定
-                button_width = 120
-                button_height = 40
-                button_x = settings.SCREEN_WIDTH - button_width - 150 # 捨て札表示と被らないように左にずらす
-                button_y = log_area_y - button_height - 10
-                end_turn_button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
-                if end_turn_button_rect.collidepoint(event.pos):
-                    self.end_player_turn()
-                    return # 他のクリック処理は行わない
-
-                # 敵をクリックしたか判定
-                for i, enemy in enumerate(self.enemies):
-                    if not enemy.is_alive: continue
-                    enemy_rect = pygame.Rect(enemy.x, enemy.y, 80, 100)
-                    if enemy_rect.collidepoint(event.pos):
-                        self.targeted_enemy_index = i
-                        return # 敵をクリックしたら他の処理はしない
-
-                # カードをクリックしたか判定
-                if self.hovered_card_index is not None:
-                    card_index = self.hovered_card_index
-                    action_id = self.deck_manager.hand[card_index]
-                    action = ACTIONS[action_id]
-
-                    target_enemy = None
-                    if self.targeted_enemy_index is not None and self.enemies[self.targeted_enemy_index].is_alive:
-                        target_enemy = self.enemies[self.targeted_enemy_index]
-
-                    # 攻撃カードの場合、ターゲットが必要
-                    if action["type"] == "attack":
-                        if target_enemy:
-                            log_messages = ActionHandler.execute_player_action(self.player, target_enemy, action_id, self.deck_manager)
-                            for msg in log_messages:
-                                self.add_log(msg)
-                            self.used_card_indices.add(card_index)
-                            self._update_target_after_enemy_death() # ターゲット更新処理を呼び出す
-                        else:
-                            self.add_log("攻撃対象を選択してください。")
-                            return
-                    # 攻撃以外（スキルなど）なら即時実行
-                    else:
-                        dummy_target = target_enemy or next((e for e in self.enemies if e.is_alive), None)
-                        if dummy_target:
-                            log_messages = ActionHandler.execute_player_action(self.player, dummy_target, action_id, self.deck_manager)
-                            for msg in log_messages:
-                                self.add_log(msg)
-                        self.used_card_indices.add(card_index)
-                        self._update_target_after_enemy_death() # ターゲット更新処理を呼び出す
-
-                    self._check_game_over()
-                    if self.game_over: self.end_player_turn()
-                    return
-
-        if event.type == pygame.KEYDOWN:
-            key = event.key
+        """入力処理をInputHandlerに委譲する"""
+        self.input_handler.process_event(event)
 
     def update_state(self):
         if self.turn == "enemy" and not self.game_over:
