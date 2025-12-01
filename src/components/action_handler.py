@@ -38,8 +38,9 @@ class ActionHandler:
         
         elif action_type == "skill":
             if action_id == "guard":
-                player.defense_buff += action["power"]
-                log.append(f"{player.name}は防御の構えをとった！")
+                gained_defense = action["power"] + player.defense_power
+                player.defense_buff += gained_defense
+                log.append(f"{player.name}は{gained_defense}防御を得た！")
             elif "effect" in action:
                 # スキルの対象を決定 (デフォルトは敵)
                 if action.get("target") == "self":
@@ -100,6 +101,6 @@ class ActionHandler:
             
             return base_power
         elif action_id == "guard": # "防御"カード
-            return power
+            return power + player.defense_power
         
         return None

@@ -10,6 +10,7 @@ class Character:
         self.max_mana: int = max_mp
         self.current_mana: int = max_mp
         self.attack_power: int = attack_power
+        self.defense_power: int = 0
         self.x: int = x
         self.y: int = y
         self.is_alive: bool = True
