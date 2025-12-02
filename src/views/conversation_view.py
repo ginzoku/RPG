@@ -22,8 +22,8 @@ class ConversationView:
         return pygame.font.Font(None, size)
 
     def draw(self, conversation_scene: ConversationScene, map_view, map_scene):
-        # 背景として現在のマップを描画
-        map_view.draw(map_scene)
+        # 背景を黒で塗りつぶす
+        self.screen.fill(settings.BLACK)
 
         # 会話ウィンドウ
         window_height = 150
