@@ -29,7 +29,7 @@ class EnemyManager:
             monster_data = MONSTERS[enemy_info["id"]]
             pos = positions[enemy_info["pos_index"]]
             enemy = Monster(name=monster_data["name"], max_hp=monster_data["max_hp"], attack_power=monster_data["attack_power"],
-                            actions=monster_data["actions"], x=pos[0], y=pos[1])
+                            actions=monster_data["actions"], x=pos[0], y=pos[1], gold=monster_data.get("gold", 0))
             self.enemies.append(enemy)
         
         self.enemies.sort(key=lambda e: e.x)

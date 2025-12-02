@@ -21,6 +21,7 @@ class Character:
         self.status_effects: dict[str, int] = {} # key: status_id, value: turns
         self.relics: list[str] = ["red_stone"] # 初期レリック
         self.is_targeted: bool = False # ターゲット選択時にハイライトするためのフラグ
+        self.gold: int = 0 # 所持ゴールド
 
         # レリックの効果を初期適用
         self._apply_initial_relic_effects()

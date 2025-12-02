@@ -3,10 +3,11 @@ import random
 from .character import Character
 
 class Monster(Character):
-    def __init__(self, name: str, max_hp: int, attack_power: int, actions: list[str], x: int, y: int):
+    def __init__(self, name: str, max_hp: int, attack_power: int, actions: list[str], x: int, y: int, gold: int):
         # モンスターはMPを使わない想定なので max_mp=0 で初期化
         super().__init__(name, max_hp, 0, attack_power, x, y)
         self.actions = actions
+        self.gold = gold
         self.next_action: str | None = None
         
         # アニメーション用属性

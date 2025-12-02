@@ -34,6 +34,7 @@ class BattleScene:
         self.hovered_card_index: int | None = None
         self.hovered_relic_index: int | None = None
         self.targeted_enemy_index: int | None = None # 現在選択されている敵のインデックス
+        self.reward_gold: int = 0 # 勝利時に獲得するゴールド
         
         # プレイヤーの戦闘開始時の状態リセット
         self.player.reset_for_battle()
@@ -53,6 +54,9 @@ class BattleScene:
     
     def _check_game_over(self):
         if all(not enemy.is_alive for enemy in self.enemy_manager.enemies):
+            self.reward_gold = sum(enemy.gold for enemy in self.enemy_manager.enemies)
+            self.player.gold += self.reward_gold
+            self.add_log(f"{self.reward_gold}ゴールドを獲得した！")
             self.add_log("敵を全て倒した！")
             self.game_over = True
             self.winner = "player"

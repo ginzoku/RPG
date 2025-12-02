@@ -153,6 +153,11 @@ class BattleView:
             
             result_rect = result_text.get_rect(center=(settings.SCREEN_WIDTH // 2, settings.SCREEN_HEIGHT // 2 - 100))
             self.screen.blit(result_text, result_rect)
+
+            if battle_state.reward_gold > 0:
+                gold_text = self.fonts["medium"].render(f"{battle_state.reward_gold} ゴールド獲得", True, settings.YELLOW)
+                gold_rect = gold_text.get_rect(center=(settings.SCREEN_WIDTH // 2, result_rect.bottom + 30))
+                self.screen.blit(gold_text, gold_rect)
             
             restart_text = self.fonts["medium"].render("Rキー: マップに戻る", True, settings.WHITE)
             restart_rect = restart_text.get_rect(center=(settings.SCREEN_WIDTH // 2, settings.SCREEN_HEIGHT // 2 + 50))
