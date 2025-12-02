@@ -43,4 +43,8 @@ class MapView:
         for enemy in map_scene.enemies:
             pygame.draw.rect(self.screen, settings.RED, enemy.rect)
 
+        # NPC
+        for npc in map_scene.npcs:
+            pygame.draw.rect(self.screen, npc.color, npc.rect)
+
         pygame.display.flip()

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import pygame
 from ..components.enemy_symbol import EnemySymbol # 修正
+from ..components.npc import Npc
 from ..config import settings
 from ..data.map_data import MAP_DATA
 
@@ -18,6 +19,10 @@ class MapScene:
             EnemySymbol(200, 200, "goblin_duo"),
             EnemySymbol(720, 400, "slime_trio"),
         ]
+        # NPCをリストで管理
+        self.npcs = [
+            Npc(10 * self.grid_size, 6 * self.grid_size, self.grid_size, "npc_1_intro")
+        ]
         
         self.collided_enemy = None # 衝突した敵
 
@@ -31,7 +36,16 @@ class MapScene:
         grid_y = new_y // self.grid_size
 
         # 移動先がマップ範囲内で、かつ移動可能なマスかチェック
-        if 0 <= grid_x < self.map_width and 0 <= grid_y < self.map_height and self.map_data[grid_y][grid_x] == 1:
+        is_valid_move = (0 <= grid_x < self.map_width and 
+                        0 <= grid_y < self.map_height and 
+                        self.map_data[grid_y][grid_x] == 1)
+
+        if is_valid_move:
+            # 移動先にNPCがいないかチェック
+            new_rect = pygame.Rect(new_x, new_y, self.grid_size, self.grid_size)
+            if any(new_rect.colliderect(npc.rect) for npc in self.npcs):
+                return # NPCがいる場合は移動しない
+
             self.player_rect.x = new_x
             self.player_rect.y = new_y
 
