@@ -51,6 +51,18 @@ class Character:
             self.is_alive = False
         return actual_damage # 実際に与えたダメージ量を返す
     
+    def take_sanity_damage(self, damage: int) -> int:
+        """正気度にダメージを受ける。正気度が0になったら死亡する。"""
+        if self.current_sanity is None:
+            return 0 # 正気度を持たないキャラクター
+
+        self.current_sanity -= damage
+        if self.current_sanity <= 0:
+            self.current_sanity = 0
+            self.is_alive = False # 正気度が0になったら死亡
+
+        return damage # 実際に受けたダメージ量を返す
+
     def heal(self, amount: int):
         self.current_hp = min(self.current_hp + amount, self.max_hp)
     

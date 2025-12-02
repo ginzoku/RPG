@@ -76,6 +76,11 @@ class ActionHandler:
                 player.apply_status(action_data["effect"], action_data.get("effect_power", 1))
                 log.append(f"{player.name}は{STATUS_EFFECTS[action_data['effect']]['name']}になった！")
         
+        elif action_type == "sanity_attack":
+            damage = action_data.get("power", 0)
+            actual_damage = player.take_sanity_damage(damage)
+            log.append(f"{player.name}の正気度が{actual_damage}削られた！")
+
         return log
 
     @staticmethod

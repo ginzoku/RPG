@@ -27,5 +27,8 @@ ENEMY_GROUPS = {
         {"id": "slime", "pos_index": 0},
         {"id": "slime", "pos_index": 1},
         {"id": "slime", "pos_index": 2},
+    ],
+    "shadow_eye_solo": [
+        {"id": "shadow_eye", "pos_index": 0},
     ]
 }

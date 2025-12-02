@@ -19,5 +19,11 @@ MONSTERS = {
         "max_hp": 40,
         "attack_power": 5,
         "actions": ["normal_attack", "fire_spell"]
+    },
+    "shadow_eye": {
+        "name": "シャドウアイ",
+        "max_hp": 60,
+        "attack_power": 10,
+        "actions": ["normal_attack", "mind_crush", "mind_crush"]
     }
 }

@@ -40,5 +40,12 @@ MONSTER_ACTIONS = {
         "type": "wait",
         "intent_type": "unknown",
         "message": "{monster_name}は様子を見ている..."
+    },
+    "mind_crush": {
+        "name": "精神攻撃",
+        "type": "sanity_attack",
+        "intent_type": "sanity_attack", # 正気度攻撃用のインテントタイプ
+        "power": 10, # 正気度へのダメージ
+        "message": "{monster_name}の{action_name}！不気味な視線が精神を蝕む...！"
     }
 }
