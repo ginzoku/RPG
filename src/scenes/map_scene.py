@@ -18,6 +18,7 @@ class MapScene:
         self.enemies = [
             EnemySymbol(200, 200, "goblin_duo"),
             EnemySymbol(720, 400, "slime_trio"),
+            EnemySymbol(800, 500, "poison_slime_single"), # ポイズンスライムを追加
         ]
         # NPCをリストで管理
         self.npcs = [

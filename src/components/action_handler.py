@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import math
-import random
 from .character import Character
 from .deck_manager import DeckManager
 from ..data.action_data import ACTIONS
@@ -9,98 +8,83 @@ from ..data.status_effect_data import STATUS_EFFECTS
 
 class ActionHandler:
     @staticmethod
-    def execute_player_action(player: Character, enemy: Character, action_id: str, deck_manager: DeckManager) -> list[str]:
-        action = ACTIONS[action_id]
-        log = []
+    def get_card_display_power(player: Character, action_id: str) -> int:
+        """カードに表示する最終的なダメージ量を計算する"""
+        action = ACTIONS.get(action_id)
+        if not action or action.get("type") != "attack":
+            return 0
 
-        if not player.use_mana(action["cost"]):
-            log.append("マナが足りない！")
-            return log
-
-        log.append(f"{player.name}は「{action['name']}」を使った！")
-
-        action_type = action["type"]
-        if action_type == "attack":
-            damage_type = action.get("damage_type", "physical")
-            if damage_type == "physical":
-                base_power = action["power"]
-                if "weak" in player.status_effects:
-                    base_power = math.ceil(base_power * STATUS_EFFECTS["weak"]["value"])
-                base_damage = base_power + player.attack_power # attack_powerを加算
-                damage_variance = random.randint(-int(base_damage * 0.1), int(base_damage * 0.1))
-                damage = max(1, base_damage + damage_variance)
-                actual_damage = enemy.take_damage(damage)
-                log.append(f"{enemy.name}に{actual_damage}ダメージ！")
-            elif damage_type == "magical":
-                damage = action["power"]
-                actual_damage = enemy.take_damage(damage)
-                log.append(f"{enemy.name}に{actual_damage}ダメージ！")
+        damage = player.attack_power + action.get("damage", 0)
+        if "weak" in player.status_effects:
+            damage = math.ceil(damage * STATUS_EFFECTS["weak"]["value"])
         
-        elif action_type == "skill":
-            if action_id == "guard":
-                gained_defense = action["power"] + player.defense_power
-                player.defense_buff += gained_defense
-                log.append(f"{player.name}は{gained_defense}防御を得た！")
-            elif "effect" in action:
-                # スキルの対象を決定 (デフォルトは敵)
-                if action.get("target") == "self":
-                    target_character = player
-                    target_name = player.name
-                else:
-                    target_character = enemy
-                    target_name = enemy.name
+        return damage
 
-                status_id = action["effect"]
-                turns = action.get("power", 1)
-                target_character.apply_status(status_id, turns)
-                status_name = STATUS_EFFECTS[status_id]["name"]
-                log.append(f"{target_name}は{status_name}になった！")
-            elif action_id == "draw_card":
-                num_to_draw = action.get("power", 1)
-                deck_manager.draw_cards(num_to_draw)
+    @staticmethod
+    def execute_player_action(player: Character, target: Character, action_id: str, deck_manager: DeckManager) -> list[str]:
+        action = ACTIONS[action_id]
+        cost = action.get("cost", 0)
+        
+        if not player.use_mana(cost):
+            return ["マナが足りません！"]
 
-        return log
+        log_messages = [f"プレイヤーは「{action['name']}」を使った！"]
+
+        if action["type"] == "attack":
+            damage = player.attack_power + action.get("damage", 0)
+            actual_damage = target.take_damage(ActionHandler.get_card_display_power(player, action_id))
+            log_messages.append(f"{target.name}に{actual_damage}のダメージ！")
+        
+        if action["type"] == "skill":
+            if "effects" in action:
+                for effect in action["effects"]:
+                    if effect["type"] == "draw_card":
+                        if not deck_manager.draw_cards(effect["value"]):
+                            log_messages.append("しかし山札がなかった！")
+                        else:
+                            log_messages.append(f"カードを{effect['value']}枚引いた。")
+                    elif effect["type"] == "gain_defense":
+                        player.defense_buff += effect["value"]
+                        log_messages.append(f"防御を{effect['value']}得た。")
+                    elif effect["type"] == "apply_status_to_self":
+                        player.apply_status(effect["status_id"], effect["turns"])
+                        status_name = STATUS_EFFECTS[effect["status_id"]]["name"]
+                        log_messages.append(f"プレイヤーは{status_name}状態になった。")
+                    elif effect["type"] == "apply_status_to_target":
+                        target.apply_status(effect["status_id"], effect["turns"])
+                        status_name = STATUS_EFFECTS[effect["status_id"]]["name"]
+                        log_messages.append(f"{target.name}は{status_name}状態になった。")
+
+        return log_messages
 
     @staticmethod
     def execute_monster_action(monster: Character, player: Character, action_id: str) -> list[str]:
         action_data = MONSTER_ACTIONS[action_id]
         log = [action_data["message"].format(monster_name=monster.name, action_name=action_data["name"])]
 
-        action_type = action_data["type"]
-        if action_type == "attack" or action_type == "attack_debuff":
-            power = action_data["power"]
-            base_damage = int(monster.attack_power * power)
-            actual_damage = player.take_damage(base_damage)
-            log.append(f"{player.name}に{actual_damage}ダメージ！")
-            if "effect" in action_data:
-                player.apply_status(action_data["effect"], action_data.get("effect_power", 1))
-                log.append(f"{player.name}は{STATUS_EFFECTS[action_data['effect']]['name']}になった！")
-        
+        action_type = action_data.get("type", "attack")
+
+        if action_type in ["attack", "attack_debuff"]:
+            power = action_data.get("power", 1.0)
+            damage = math.ceil(monster.attack_power * power)
+            
+            # 衰弱効果の適用
+            if "weak" in monster.status_effects:
+                damage = math.ceil(damage * STATUS_EFFECTS["weak"]["value"])
+
+            actual_damage = player.take_damage(damage)
+            log.append(f"{player.name}に{actual_damage}のダメージ！")
+
+        if "effects" in action_data:
+            for effect in action_data["effects"]:
+                if effect["type"] == "apply_status":
+                    target = player # 今はプレイヤーにしか付与しない
+                    status_id = effect["status_id"]
+                    turns = effect["turns"]
+                    
+                    target.apply_status(status_id, turns)
+                    
+                    status_name = STATUS_EFFECTS[status_id]["name"]
+                    log.append(f"{target.name}は{status_name}状態になった！")
+
         return log
-
-    @staticmethod
-    def get_card_display_power(player: Character, action_id: str) -> int | None:
-        """
-        カードに表示するための最終的な威力/防御値を計算する。
-        表示する値がない場合はNoneを返す。
-        """
-        action = ACTIONS.get(action_id)
-        if not action:
-            return None
-
-        action_type = action.get("type")
-        power = action.get("power")
-
-        if action_type == "attack":
-            base_power = power
-            if action.get("damage_type") == "physical":
-                base_power += player.attack_power
-            
-            if "weak" in player.status_effects:
-                base_power = math.ceil(base_power * STATUS_EFFECTS["weak"]["value"])
-            
-            return base_power
-        elif action_id == "guard": # "防御"カード
-            return power + player.defense_power
-        
-        return None

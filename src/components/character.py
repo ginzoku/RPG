@@ -70,8 +70,12 @@ class Character:
         self.current_mana = self.max_mana
 
     def apply_status(self, status_id: str, turns: int):
-        """状態異常を付与する（効果は上書きせず、大きい方を採用）"""
-        self.status_effects[status_id] = max(self.status_effects.get(status_id, 0), turns)
+        """状態異常を付与する。毒の場合はスタックを加算、それ以外は大きい方で上書き。"""
+        status_data = STATUS_EFFECTS.get(status_id)
+        if status_data and status_id == "poison":
+            self.status_effects[status_id] = self.status_effects.get(status_id, 0) + turns
+        else:
+            self.status_effects[status_id] = max(self.status_effects.get(status_id, 0), turns)
 
     def decrement_status_effects(self):
         """ターン終了時に状態異常の効果を発動し、ターン数を1減らす"""
