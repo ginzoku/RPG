@@ -123,22 +123,32 @@ class CharacterStatusDrawer:
 
         intent_type = action_data.get("intent_type", "unknown")
         intent_text = ""
+        text_color = settings.WHITE # デフォルトの色
         icon = "?" # デフォルト
 
         if intent_type == "attack":
             power = action_data["power"]
             damage = int(monster.attack_power * power)
             intent_text = str(damage)
+            text_color = settings.RED # 物理ダメージは赤
+            icon = "⚔"
+        elif intent_type == "sanity_attack":
+            power = action_data["power"]
+            intent_text = str(power)
+            text_color = settings.YELLOW # 正気度ダメージは黄色
             icon = "⚔"
         elif intent_type == "attack_debuff":
             power = action_data["power"]
             damage = int(monster.attack_power * power)
             intent_text = str(damage)
+            text_color = settings.RED # 物理＋デバフも赤
             icon = "⚔" # アイコンは攻撃と同じ
         elif intent_type == "debuff":
             icon = "↓"
+        elif intent_type == "unknown":
+            text_color = settings.LIGHT_GRAY
 
         full_text = f"{icon} {intent_text}"
-        text_surface = self.fonts["medium"].render(full_text, True, settings.WHITE)
+        text_surface = self.fonts["medium"].render(full_text, True, text_color)
         text_rect = text_surface.get_rect(centerx=monster.x + 40, bottom=monster.y - 10)
         screen.blit(text_surface, text_rect)
