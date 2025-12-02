@@ -81,7 +81,7 @@ class GameController:
                         self.battle_scene.game_over = False # ゲームオーバー状態をリセット
             
             elif self.game_state == "conversation":
-                self.conversation_view.draw(self.conversation_scene, self.map_view, self.map_scene)
+                self.conversation_view.draw(self.conversation_scene)
                 if self.conversation_scene.is_finished:
                     self.game_state = "map"
 

@@ -33,6 +33,7 @@ class BattleScene:
         self.winner: str | None = None
         self.hovered_card_index: int | None = None
         self.hovered_relic_index: int | None = None
+        self.hovered_status_effect: tuple[Character, str] | None = None # (キャラクター, status_id)
         self.targeted_enemy_index: int | None = None # 現在選択されている敵のインデックス
         
         # プレイヤーの戦闘開始時の状態リセット
@@ -90,7 +91,7 @@ class BattleScene:
         # 敵の防御値をリセット
         for enemy in self.enemy_manager.enemies:
             enemy.defense_buff = 0
-        self.player.decrement_status_effects() # プレイヤーのターン終了処理
+        self.player.decrement_poison_stack() # 毒スタックを減らす
         self.deck_manager.discard_hand()
         self.hovered_card_index = None
         self.enemy_manager.turn_state = "start"
@@ -143,12 +144,18 @@ class BattleScene:
                 # 敵のターン終了処理
                 for enemy in self.enemy_manager.enemies:
                     enemy.decide_next_action()
-                    enemy.decrement_status_effects()
+                    enemy.decrement_status_effects() # 通常の状態異常ターンを減らす
+                    enemy.decrement_poison_stack() # 毒スタックを減らす
                 
                 # プレイヤーの防御値をリセット
                 self.player.defense_buff = 0
                 
                 self.turn = "player"
-                self.player.decrement_status_effects()
+                self.player.decrement_status_effects() # プレイヤーの状態異常ターンを減らす
+                # プレイヤーのターン開始時効果（毒など）
+                poison_logs = self.player.apply_start_of_turn_effects()
+                for msg in poison_logs: self.add_log(msg)
+                self._check_game_over()
+
                 if not self.deck_manager.draw_cards(5): self.add_log("山札がありません！")
                 self.player.fully_recover_mana()

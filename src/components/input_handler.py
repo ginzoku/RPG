@@ -29,6 +29,7 @@ class InputHandler:
         """マウス移動イベントを処理し、ホバー状態を更新する"""
         self.scene.hovered_card_index = None
         self.scene.hovered_relic_index = None
+        self.scene.hovered_status_effect = None
         for enemy in self.scene.enemy_manager.enemies:
             enemy.is_targeted = False
 
@@ -42,6 +43,25 @@ class InputHandler:
             if relic_rect.collidepoint(pos):
                 self.scene.hovered_relic_index = i
                 return
+
+        # 状態異常アイコンのホバー判定
+        all_characters = [self.scene.player] + self.scene.enemy_manager.enemies
+        for character in all_characters:
+            if not character.is_alive:
+                continue
+            
+            base_y = character.y + 100 + 5 # キャラクターの高さ + 余白
+            status_effects_y = base_y + 30 + 30 + 30 # HP, SAN, MANAバーの下
+            icon_size = 30
+            
+            for i, status_id in enumerate(character.status_effects.keys()):
+                icon_x = character.x - 10 + i * (icon_size + 5)
+                icon_y = status_effects_y
+                icon_rect = pygame.Rect(icon_x, icon_y, icon_size, icon_size)
+
+                if icon_rect.collidepoint(pos):
+                    self.scene.hovered_status_effect = (character, status_id)
+                    return
 
         # 敵のホバー判定
         for i, enemy in enumerate(self.scene.enemy_manager.enemies):

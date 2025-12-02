@@ -55,19 +55,59 @@ class CharacterStatusDrawer:
             self._draw_sanity_bar(screen, character, character.x - 10, sanity_bar_y, 100, 15)
             self._draw_mana_orbs(screen, character, character.x - 10, mana_orbs_y)
 
-        self._draw_status_effects(screen, character, character.x - 10, status_effects_y)
+        self._draw_status_effects(screen, character, character.x - 10, status_effects_y, is_player=(character.max_mana > 0))
 
         # 敵の場合のみインテントを描画
         if hasattr(character, 'next_action') and character.next_action:
             self._draw_intent(screen, character)
+    
+    def draw_tooltip(self, screen: pygame.Surface, character: Character, status_id: str):
+        """状態異常のツールチップを描画する"""
+        status_data = STATUS_EFFECTS.get(status_id)
+        if not status_data:
+            return
 
-    def _draw_status_effects(self, screen: pygame.Surface, character: Character, x: int, y: int):
-        status_offset = 0
-        for status_id, turns in character.status_effects.items():
+        width, height = 250, 100
+        x = (screen.get_width() - width) / 2
+        y = (screen.get_height() - height) / 2
+        rect = pygame.Rect(x, y, width, height)
+
+        pygame.draw.rect(screen, (40, 40, 60), rect, border_radius=10)
+        pygame.draw.rect(screen, settings.WHITE, rect, 2, border_radius=10)
+
+        name_text = self.fonts["medium"].render(f"{status_data['name']} ({character.status_effects[status_id]})", True, settings.WHITE)
+        name_rect = name_text.get_rect(centerx=rect.centerx, y=rect.top + 15)
+        screen.blit(name_text, name_rect)
+
+        desc_text = self.fonts["small"].render(status_data["description"], True, settings.WHITE)
+        desc_rect = desc_text.get_rect(centerx=rect.centerx, y=name_rect.bottom + 10)
+        screen.blit(desc_text, desc_rect)
+
+    def _draw_status_effects(self, screen: pygame.Surface, character: Character, x: int, y: int, is_player: bool):
+        icon_size = 30
+        icon_font = self.fonts["medium"]
+        turn_font = self.fonts["small"]
+
+        for i, (status_id, turns) in enumerate(character.status_effects.items()):
             status_data = STATUS_EFFECTS[status_id]
-            status_text = self.fonts["small"].render(f"{status_data['name']}: {turns}", True, status_data['color'])
-            screen.blit(status_text, (x, y + status_offset))
-            status_offset += 25
+            icon_x = x + i * (icon_size + 5)
+            icon_y = y if is_player else y - 60 # 敵キャラはSAN/MANAがない分上に表示
+            
+            # アイコン背景
+            icon_bg_rect = pygame.Rect(icon_x, icon_y, icon_size, icon_size)
+            pygame.draw.rect(screen, settings.DARK_GRAY, icon_bg_rect, border_radius=5)
+            pygame.draw.rect(screen, settings.WHITE, icon_bg_rect, 1, border_radius=5)
+
+            # アイコン文字
+            icon_surface = icon_font.render(status_data['icon'], True, status_data['color'])
+            icon_rect = icon_surface.get_rect(center=icon_bg_rect.center)
+            screen.blit(icon_surface, icon_rect)
+
+            # ターン数
+            turn_surface = turn_font.render(str(turns), True, settings.WHITE)
+            turn_rect = turn_surface.get_rect(bottomright=(icon_bg_rect.right + 5, icon_bg_rect.bottom + 5))
+            pygame.draw.circle(screen, settings.BLACK, turn_rect.center, 10)
+            screen.blit(turn_surface, turn_rect)
 
     def _draw_hp_bar(self, screen: pygame.Surface, character: Character, x: int, y: int, width: int, height: int):
         pygame.draw.rect(screen, settings.DARK_GRAY, (x, y, width, height))

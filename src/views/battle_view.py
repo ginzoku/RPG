@@ -60,6 +60,13 @@ class BattleView:
         self.relic_drawer.draw(self.screen, battle_state)
         self._draw_ui(battle_state)
         
+        # 状態異常のツールチップ描画
+        if battle_state.hovered_status_effect:
+            character, status_id = battle_state.hovered_status_effect
+            # ツールチップを描画する直前に、その状態異常がまだ存在するか確認
+            if status_id in character.status_effects:
+                self.status_drawer.draw_tooltip(self.screen, character, status_id)
+
         # ダメージアニメーションの更新と描画
         self._update_and_draw_animations()
 

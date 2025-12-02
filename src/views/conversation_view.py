@@ -21,14 +21,14 @@ class ConversationView:
                 return pygame.font.Font(font_path, size)
         return pygame.font.Font(None, size)
 
-    def draw(self, conversation_scene: ConversationScene, map_view, map_scene):
-        # 背景として現在のマップを描画
-        map_view.draw(map_scene)
+    def draw(self, conversation_scene: ConversationScene):
+        # 背景を黒で塗りつぶす
+        self.screen.fill(settings.BLACK)
 
         # 会話ウィンドウ
         window_height = 150
         window_rect = pygame.Rect(50, settings.SCREEN_HEIGHT - window_height - 50, settings.SCREEN_WIDTH - 100, window_height)
-        pygame.draw.rect(self.screen, (0, 0, 0, 200), window_rect) # 半透明の黒
+        pygame.draw.rect(self.screen, settings.DARK_GRAY, window_rect) # 背景との区別のため少し明るい色に
         pygame.draw.rect(self.screen, settings.WHITE, window_rect, 2)
 
         if not conversation_scene.conversation_data:

@@ -33,23 +33,25 @@ class Character:
                     if effect["type"] == "stat_change" and effect["stat"] == "attack_power":
                         self.attack_power += effect["value"]
     
-    def take_damage(self, damage: int):
+    def take_damage(self, amount: int, ignore_defense: bool = False):
+        """キャラクターがダメージを受ける処理"""
         # 被ダメージ修飾子を持つ状態異常を適用
         if "vulnerable" in self.status_effects:
             modifier = STATUS_EFFECTS["vulnerable"]["value"]
-            damage = math.ceil(damage * modifier)
+            amount = math.ceil(amount * modifier)
 
-        # 防御バフを適用
-        absorbed_damage = min(self.defense_buff, damage)
-        actual_damage = damage - absorbed_damage
-        
-        self.defense_buff -= absorbed_damage
+        actual_damage = amount
+        if not ignore_defense:
+            # 防御バフを適用
+            absorbed_damage = min(self.defense_buff, amount)
+            actual_damage = amount - absorbed_damage
+            self.defense_buff -= absorbed_damage
 
         self.current_hp -= actual_damage
         if self.current_hp <= 0:
             self.current_hp = 0
             self.is_alive = False
-        return actual_damage # 実際に与えたダメージ量を返す
+        return actual_damage
     
     def heal(self, amount: int):
         self.current_hp = min(self.current_hp + amount, self.max_hp)
@@ -83,6 +85,27 @@ class Character:
             self.status_effects[status_id] -= 1
             if self.status_effects[status_id] <= 0:
                 del self.status_effects[status_id]
+
+    def decrement_poison_stack(self):
+        """毒スタックを1減少させる"""
+        if "poison" in self.status_effects:
+            self.status_effects["poison"] -= 1
+            if self.status_effects["poison"] <= 0:
+                del self.status_effects["poison"]
+
+    def apply_start_of_turn_effects(self) -> list[str]:
+        """ターン開始時に発動する効果を処理する（例: 毒）"""
+        log_messages = []
+        if "poison" in self.status_effects:
+            poison_damage = self.status_effects["poison"]
+            status_data = STATUS_EFFECTS["poison"]
+            
+            actual_damage = self.take_damage(poison_damage, ignore_defense=True)
+            log_messages.append(f"{self.name}は{status_data['name']}で{actual_damage}ダメージを受けた。")
+            if not self.is_alive:
+                log_messages.append(f"{self.name}は倒れた...")
+        
+        return log_messages
 
     def get_hp_percentage(self) -> float:
         return (self.current_hp / self.max_hp) * 100

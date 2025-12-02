@@ -41,6 +41,12 @@ class EnemyManager:
         log_messages = []
         if self.turn_state == "start":
             self.acting_enemy_index = 0
+
+            # 各敵のターン開始時効果（毒など）
+            for enemy in self.enemies:
+                if enemy.is_alive:
+                    log_messages.extend(enemy.apply_start_of_turn_effects())
+            
             self.turn_state = "acting"
 
         elif self.turn_state == "acting":
