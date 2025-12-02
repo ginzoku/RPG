@@ -24,5 +24,14 @@ MONSTER_ACTIONS = {
         "effects": [
             {"type": "apply_status", "status_id": "poison", "turns": 3}
         ]
+    },
+    "mind_crush": {
+        "name": "精神破壊",
+        "message": "{monster_name}は「{action_name}」を唱えた！",
+        "type": "debuff",
+        "intent_type": "debuff",
+        "effects": [
+            {"type": "sanity_damage", "value": 10}
+        ]
     }
 }

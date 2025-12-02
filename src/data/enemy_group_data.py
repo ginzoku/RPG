@@ -12,6 +12,9 @@ ENEMY_GROUPS = {
     ],
     "poison_slime_single": [
         {"id": "poison_slime", "pos_index": 0},
+    ],
+    "specter_single": [
+        {"id": "specter", "pos_index": 0},
     ]
 }
 

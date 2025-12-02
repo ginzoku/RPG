@@ -177,6 +177,13 @@ class CharacterStatusDrawer:
             icon = "⚔" # アイコンは攻撃と同じ
         elif intent_type == "debuff":
             icon = "↓"
+            # 正気度ダメージがあるかチェック
+            if "effects" in action_data:
+                for effect in action_data["effects"]:
+                    if effect["type"] == "sanity_damage":
+                        intent_text = str(effect["value"])
+                        icon = "🌀" # 正気度攻撃用のアイコン
+                        break
 
         full_text = f"{icon} {intent_text}"
         text_surface = self.fonts["medium"].render(full_text, True, settings.WHITE)

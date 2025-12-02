@@ -61,6 +61,11 @@ class BattleScene:
             self.add_log(f"{self.player.name}は倒れた...")
             self.game_over = True
             self.winner = "enemy"
+        # 正気度が0になった場合もゲームオーバー
+        if self.player.current_sanity is not None and self.player.current_sanity <= 0:
+            self.add_log(f"{self.player.name}は正気を失った...")
+            self.game_over = True
+            self.winner = "enemy"
 
     def _update_target_after_enemy_death(self):
         """

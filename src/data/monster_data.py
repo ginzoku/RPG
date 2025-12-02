@@ -18,5 +18,11 @@ MONSTERS = {
         "max_hp": 22,
         "attack_power": 2,
         "actions": ["poison_splash"]
+    },
+    "specter": {
+        "name": "亡霊",
+        "max_hp": 25,
+        "attack_power": 0, # 物理攻撃はしない
+        "actions": ["mind_crush"]
     }
 }
