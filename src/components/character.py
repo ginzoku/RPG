@@ -50,6 +50,14 @@ class Character:
         if self.current_hp <= 0:
             self.current_hp = 0
             self.is_alive = False
+        
+        # ダメージを受けたら解除される効果を処理
+        if actual_damage > 0:
+            for status_id in list(self.status_effects.keys()):
+                status_data = STATUS_EFFECTS.get(status_id, {})
+                if status_data.get("removal_condition") == "on_damage_taken":
+                    self._remove_status(status_id)
+
         return actual_damage # 実際に与えたダメージ量を返す
     
     def take_sanity_damage(self, damage: int) -> int:
@@ -81,8 +89,32 @@ class Character:
         self.current_mana = self.max_mana
 
     def apply_status(self, status_id: str, turns: int):
-        """状態異常を付与する（効果は上書きせず、大きい方を採用）"""
+        """状態異常を付与する"""
+        new_status_data = STATUS_EFFECTS.get(status_id, {})
+        
+        # 新しい効果がデバフの場合、特定のバフを解除する
+        if new_status_data.get("is_debuff", False):
+            for existing_status_id in list(self.status_effects.keys()):
+                existing_status_data = STATUS_EFFECTS.get(existing_status_id, {})
+                if existing_status_data.get("removal_condition") == "on_debuff_received":
+                    self._remove_status(existing_status_id)
+
+        # 状態異常を付与（効果は上書きせず、大きい方を採用）
         self.status_effects[status_id] = max(self.status_effects.get(status_id, 0), turns)
+
+        # 防御バフ効果を適用
+        if new_status_data.get("type") == "defense_buff":
+            self.defense_buff += new_status_data.get("value", 0)
+
+    def _remove_status(self, status_id: str):
+        """状態異常を解除し、関連する効果も元に戻す"""
+        if status_id in self.status_effects:
+            status_data = STATUS_EFFECTS.get(status_id, {})
+            # 防御バフ効果を解除
+            if status_data.get("type") == "defense_buff":
+                self.defense_buff = max(0, self.defense_buff - status_data.get("value", 0))
+            
+            del self.status_effects[status_id]
 
     def decrement_status_effects(self):
         """ターン終了時に状態異常の効果を発動し、ターン数を1減らす"""
@@ -96,10 +128,11 @@ class Character:
                 if self.current_hp == 0:
                     self.is_alive = False
             
-            # ターン数の減少
-            self.status_effects[status_id] -= 1
-            if self.status_effects[status_id] <= 0:
-                del self.status_effects[status_id]
+            # ターン数の減少 (永続効果でない場合)
+            if self.status_effects[status_id] != -1:
+                self.status_effects[status_id] -= 1
+                if self.status_effects[status_id] <= 0:
+                    self._remove_status(status_id)
 
     def get_hp_percentage(self) -> float:
         return (self.current_hp / self.max_hp) * 100

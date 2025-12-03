@@ -10,7 +10,7 @@ class CharacterStatusDrawer:
     def __init__(self, fonts: dict):
         self.fonts = fonts
 
-    def draw(self, screen: pygame.Surface, character: Character, color: tuple[int, int, int], is_selected_target: bool = False):
+    def draw(self, screen: pygame.Surface, character: Character, color: tuple[int, int, int], is_selected_target: bool = False, mouse_pos: tuple[int, int] | None = None):
         """キャラクターのステータス全体を描画するメインメソッド"""
         char_width = 80
         char_height = 100
@@ -32,9 +32,6 @@ class CharacterStatusDrawer:
             border_width = 4
         pygame.draw.rect(screen, border_color, (character.x, character.y, char_width, char_height), border_width)
         
-        # name_text = self.fonts["medium"].render(character.name, True, settings.WHITE)
-        # screen.blit(name_text, (character.x - 20, character.y - 40))
-        
         hp_text = self.fonts["small"].render(f"HP: {character.current_hp}/{character.max_hp}", True, settings.WHITE)
         screen.blit(hp_text, (character.x - 10, character.y + char_height + 5))
 
@@ -55,22 +52,22 @@ class CharacterStatusDrawer:
             screen.blit(san_text, (character.x - 10, hp_bar_y + 5))
             self._draw_sanity_bar(screen, character, character.x - 10, sanity_bar_y, 100, 15)
             self._draw_mana_orbs(screen, character, character.x - 10, mana_orbs_y)
-            self._draw_status_effects(screen, character, character.x - 10, status_effects_y)
+            self._draw_status_effects(screen, character, character.x - 10, status_effects_y, mouse_pos)
         else:
             # 敵の場合
             status_effects_y = hp_bar_y + 25 # HPバーの下
-            self._draw_status_effects(screen, character, character.x - 10, status_effects_y)
+            self._draw_status_effects(screen, character, character.x - 10, status_effects_y, mouse_pos)
 
         # 敵の場合のみインテントを描画
         if hasattr(character, 'next_action') and character.next_action:
             self._draw_intent(screen, character)
 
-    def _draw_status_effects(self, screen: pygame.Surface, character: Character, x: int, y: int):
+    def _draw_status_effects(self, screen: pygame.Surface, character: Character, x: int, y: int, mouse_pos: tuple[int, int] | None = None):
         icon_radius = 12
         icon_gap = 5
         status_offset_x = 0
         
-        font = self.fonts["card"] # 小さめのフォントを使用
+        font = self.fonts["card"]
 
         for status_id, turns in character.status_effects.items():
             status_data = STATUS_EFFECTS.get(status_id)
@@ -80,23 +77,52 @@ class CharacterStatusDrawer:
             icon_char = status_data.get("icon", "?")
             color = status_data.get("color", settings.WHITE)
 
-            # アイコンの円を描画
             center_x = x + status_offset_x + icon_radius
             center_y = y + icon_radius
+            
+            icon_rect = pygame.Rect(center_x - icon_radius, center_y - icon_radius, icon_radius * 2, icon_radius * 2)
+
             pygame.draw.circle(screen, color, (center_x, center_y), icon_radius)
             pygame.draw.circle(screen, settings.BLACK, (center_x, center_y), icon_radius, 1)
 
-            # アイコン文字を描画
             icon_text = self.fonts["small"].render(icon_char, True, settings.BLACK)
             text_rect = icon_text.get_rect(center=(center_x, center_y))
             screen.blit(icon_text, text_rect)
 
-            # ターン数を描画
-            turns_text = font.render(str(turns), True, settings.WHITE)
-            turns_rect = turns_text.get_rect(midleft=(center_x + icon_radius + 3, center_y))
-            screen.blit(turns_text, turns_rect)
+            current_icon_width = icon_radius * 2
+
+            # 永続効果でない場合のみターン数を描画
+            if turns != -1:
+                turns_text = font.render(str(turns), True, settings.WHITE)
+                turns_rect = turns_text.get_rect(midleft=(center_x + icon_radius + 3, center_y))
+                screen.blit(turns_text, turns_rect)
+                current_icon_width += icon_gap + turns_text.get_width()
+            else:
+                current_icon_width += icon_gap
             
-            status_offset_x += (icon_radius * 2) + icon_gap + turns_text.get_width()
+            status_offset_x += current_icon_width
+
+            if mouse_pos and icon_rect.collidepoint(mouse_pos):
+                self._draw_tooltip(screen, status_data, icon_rect.centerx, icon_rect.top)
+
+    def _draw_tooltip(self, screen: pygame.Surface, status_data: dict, x: int, y: int):
+        padding = 5
+        font_name = self.fonts["small"]
+        font_desc = self.fonts["card"]
+
+        name_text = font_name.render(status_data['name'], True, settings.WHITE)
+        desc_text = font_desc.render(status_data['description'], True, settings.WHITE)
+
+        width = max(name_text.get_width(), desc_text.get_width()) + padding * 2
+        height = name_text.get_height() + desc_text.get_height() + padding * 2
+
+        tooltip_rect = pygame.Rect(x - width // 2, y - height - 5, width, height)
+        
+        pygame.draw.rect(screen, settings.DARK_GRAY, tooltip_rect, border_radius=3)
+        pygame.draw.rect(screen, settings.WHITE, tooltip_rect, 1, border_radius=3)
+
+        screen.blit(name_text, (tooltip_rect.x + padding, tooltip_rect.y + padding))
+        screen.blit(desc_text, (tooltip_rect.x + padding, tooltip_rect.y + padding + name_text.get_height()))
 
     def _draw_hp_bar(self, screen: pygame.Surface, character: Character, x: int, y: int, width: int, height: int):
         pygame.draw.rect(screen, settings.DARK_GRAY, (x, y, width, height))

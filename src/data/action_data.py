@@ -65,6 +65,24 @@ ACTIONS = {
         "cost": 1,
         "description": "敵に「毒」を{power}ターン付与する。\n(ターン終了時にHPが5減少)",
     },
+    "apply_barrier": {
+        "name": "バリア展開",
+        "type": "skill",
+        "target": "self",
+        "effect": "barrier",
+        "power": -1, # 永続
+        "cost": 2,
+        "description": "「バリア」を永続的に展開する。\n(ダメージを受けると解除)",
+    },
+    "apply_focus": {
+        "name": "集中",
+        "type": "skill",
+        "target": "self",
+        "effect": "focus",
+        "power": -1, # 永続
+        "cost": 1,
+        "description": "「集中」状態になり、次の攻撃を強化する。\n(デバフを受けると解除)",
+    },
     "draw_card": {
         "name": "ドロー",
         "type": "skill",
