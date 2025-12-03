@@ -99,20 +99,17 @@ class BattleView:
             turn_text = self.fonts["medium"].render("敵のターン", True, settings.RED)
         self.screen.blit(turn_text, (settings.SCREEN_WIDTH // 2 - turn_text.get_width() // 2, 20))
         
-        # --- UIエリアのレイアウト調整 ---
-        padding = 10
-        
-        # ログエリア
-        log_area_height = int(settings.SCREEN_HEIGHT / 4)
-        log_area_y = settings.SCREEN_HEIGHT - log_area_height
-        log_area_rect = pygame.Rect(0, log_area_y, settings.SCREEN_WIDTH, log_area_height)
+        # --- UIエリアのレイアウト ---
+        command_area_height = int(settings.SCREEN_HEIGHT / 4)
+        command_area_y = settings.SCREEN_HEIGHT - command_area_height
+        command_area_rect = pygame.Rect(0, command_area_y, settings.SCREEN_WIDTH, command_area_height)
 
         # ターン終了ボタンの描画 (プレイヤーのターン中のみ)
         if battle_state.turn == "player" and not battle_state.game_over:
             button_width = 120
             button_height = 40
-            button_x = settings.SCREEN_WIDTH - button_width - 150 # 捨て札表示と被らないように左にずらす
-            button_y = log_area_y - button_height - 10 # ログエリアの上に配置
+            button_x = settings.SCREEN_WIDTH - button_width - 150
+            button_y = command_area_y - button_height - 10
             end_turn_button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
 
             pygame.draw.rect(self.screen, (100, 0, 0), end_turn_button_rect, border_radius=5)
@@ -121,11 +118,6 @@ class BattleView:
             button_text = self.fonts["small"].render("ターン終了", True, settings.WHITE)
             text_rect = button_text.get_rect(center=end_turn_button_rect.center)
             self.screen.blit(button_text, text_rect)
-
-        # プレイヤーのターンでない時だけログエリアの背景を描画
-        if battle_state.turn != "player":
-            pygame.draw.rect(self.screen, settings.DARK_GRAY, log_area_rect)
-            pygame.draw.rect(self.screen, settings.WHITE, log_area_rect, 2)
 
         # デッキと捨て札の枚数を描画
         if not battle_state.game_over:
@@ -141,10 +133,7 @@ class BattleView:
 
         # プレイヤーのターンならコマンドを描画
         if battle_state.turn == "player" and not battle_state.game_over:
-            self.command_drawer.draw(self.screen, battle_state, log_area_rect)
-        else:
-            # それ以外の場合はバトルログを描画
-            self._draw_battle_log(battle_state, log_area_rect)
+            self.command_drawer.draw(self.screen, battle_state, command_area_rect)
         
         if battle_state.game_over:
             if battle_state.winner == "player":
@@ -163,14 +152,3 @@ class BattleView:
             restart_text = self.fonts["medium"].render("Rキー: マップに戻る", True, settings.WHITE)
             restart_rect = restart_text.get_rect(center=(settings.SCREEN_WIDTH // 2, settings.SCREEN_HEIGHT // 2 + 50))
             self.screen.blit(restart_text, restart_rect)
-
-    def _draw_battle_log(self, battle_state: BattleScene, log_area_rect: pygame.Rect):
-        padding = 10
-        start_x = log_area_rect.left + padding
-        drawable_height = log_area_rect.height - (padding * 2)
-        line_height = drawable_height // battle_state.max_log_lines if battle_state.max_log_lines > 0 else drawable_height
-        start_y = log_area_rect.top + padding + (line_height - self.fonts["log"].get_height()) // 2
-
-        for i, message in enumerate(battle_state.battle_log):
-            log_text = self.fonts["log"].render(message, True, settings.LIGHT_BLUE)
-            self.screen.blit(log_text, (start_x, start_y + i * line_height))

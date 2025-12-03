@@ -27,8 +27,6 @@ class BattleScene:
         
         # ゲーム状態
         self.turn: str = "player"
-        self.battle_log: list[str] = []
-        self.max_log_lines: int = 4
         self.game_over: bool = False
         self.winner: str | None = None
         self.hovered_card_index: int | None = None
@@ -45,23 +43,13 @@ class BattleScene:
         first_living_enemy_index = next((i for i, e in enumerate(self.enemy_manager.enemies) if e.is_alive), None)
         self.targeted_enemy_index = first_living_enemy_index
 
-        self.add_log("戦闘開始！")
-
-    def add_log(self, message: str):
-        self.battle_log.append(message)
-        if len(self.battle_log) > self.max_log_lines:
-            self.battle_log.pop(0)
-    
     def _check_game_over(self):
         if all(not enemy.is_alive for enemy in self.enemy_manager.enemies):
             self.reward_gold = sum(enemy.gold for enemy in self.enemy_manager.enemies)
             self.player.gold += self.reward_gold
-            self.add_log(f"{self.reward_gold}ゴールドを獲得した！")
-            self.add_log("敵を全て倒した！")
             self.game_over = True
             self.winner = "player"
         if not self.player.is_alive:
-            self.add_log(f"{self.player.name}は倒れた...")
             self.game_over = True
             self.winner = "enemy"
 
@@ -90,7 +78,6 @@ class BattleScene:
     
     def end_player_turn(self):
         self.turn = "enemy"
-        self.add_log("プレイヤーのターン終了")
         # 敵の防御値をリセット
         for enemy in self.enemy_manager.enemies:
             enemy.defense_buff = 0
@@ -115,17 +102,14 @@ class BattleScene:
         # 攻撃カードの場合、ターゲットが必要
         if action["type"] == "attack":
             if not target_enemy:
-                self.add_log("攻撃対象を選択してください。")
                 return
-            log_messages = ActionHandler.execute_player_action(self.player, target_enemy, action_id, self.deck_manager)
+            ActionHandler.execute_player_action(self.player, target_enemy, action_id, self.deck_manager)
         # 攻撃以外（スキルなど）なら即時実行
         else:
             dummy_target = target_enemy or next((e for e in self.enemy_manager.enemies if e.is_alive), None)
             if not dummy_target: return # 実行対象がいない
-            log_messages = ActionHandler.execute_player_action(self.player, dummy_target, action_id, self.deck_manager)
+            ActionHandler.execute_player_action(self.player, dummy_target, action_id, self.deck_manager)
 
-        for msg in log_messages:
-            self.add_log(msg)
         self.deck_manager.move_used_card(card_index)
         self.hovered_card_index = None # ホバー状態をリセット
         self._update_target_after_enemy_death()
@@ -138,9 +122,7 @@ class BattleScene:
 
     def update_state(self):
         if self.turn == "enemy" and not self.game_over:
-            log_messages = self.enemy_manager.update_turn()
-            for msg in log_messages:
-                self.add_log(msg)
+            self.enemy_manager.update_turn()
             self._check_game_over()
 
             if self.enemy_manager.turn_state == "finished":
@@ -153,5 +135,5 @@ class BattleScene:
                 self.player.defense_buff = 0
                 
                 self.turn = "player"
-                if not self.deck_manager.draw_cards(5): self.add_log("山札がありません！")
+                self.deck_manager.draw_cards(5)
                 self.player.fully_recover_mana()
