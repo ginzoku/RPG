@@ -81,7 +81,8 @@ class BattleScene:
         # 敵の防御値をリセット
         for enemy in self.enemy_manager.enemies:
             enemy.defense_buff = 0
-        self.player.decrement_status_effects() # プレイヤーのターン終了処理
+        if not self.game_over:
+            self.player.decrement_status_effects() # プレイヤーのターン終了処理
         self.deck_manager.discard_hand()
         self.hovered_card_index = None
         self.enemy_manager.turn_state = "start"
@@ -144,7 +145,8 @@ class BattleScene:
                         enemy.targets = [self.player] # 将来的に味方が増える場合はリストにする
                     else: # single, self
                         enemy.targets = [self.player]
-                    enemy.decrement_status_effects()
+                    if not self.game_over:
+                        enemy.decrement_status_effects()
                 
                 # プレイヤーの防御値をリセット
                 self.player.defense_buff = 0
