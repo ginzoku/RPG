@@ -6,6 +6,7 @@ from .deck_manager import DeckManager
 from ..data.action_data import ACTIONS
 from ..data.monster_action_data import MONSTER_ACTIONS
 from ..data.status_effect_data import STATUS_EFFECTS
+from .status_effect_processor import StatusEffectProcessor
 
 class ActionHandler:
     @staticmethod
@@ -23,13 +24,15 @@ class ActionHandler:
         if action_type == "attack":
             damage_type = action.get("damage_type", "physical")
             if damage_type == "physical":
-                base_power = action["power"]
-                if "weak" in player.status_effects:
-                    base_power = math.ceil(base_power * STATUS_EFFECTS["weak"]["value"])
-                base_damage = base_power + player.attack_power # attack_powerを加算
-                damage_variance = random.randint(-int(base_damage * 0.1), int(base_damage * 0.1))
-                damage = max(1, base_damage + damage_variance)
-                actual_damage = enemy.take_damage(damage)
+                base_damage = action["power"] + player.attack_power
+                
+                # ステータス効果によるダメージ修飾
+                modified_damage = StatusEffectProcessor.modify_outgoing_damage(player, base_damage)
+                
+                damage_variance = random.randint(-int(modified_damage * 0.1), int(modified_damage * 0.1))
+                final_damage = max(1, modified_damage + damage_variance)
+                
+                actual_damage = enemy.take_damage(final_damage)
                 log.append(f"{enemy.name}に{actual_damage}ダメージ！")
             elif damage_type == "magical":
                 damage = action["power"]
@@ -68,10 +71,14 @@ class ActionHandler:
 
         action_type = action_data["type"]
         if action_type == "attack" or action_type == "attack_debuff":
-            power = action_data["power"]
-            base_damage = int(monster.attack_power * power)
-            actual_damage = player.take_damage(base_damage)
+            base_damage = int(monster.attack_power * action_data["power"])
+
+            # モンスターの攻撃にも衰弱などの効果を適用
+            modified_damage = StatusEffectProcessor.modify_outgoing_damage(monster, base_damage)
+
+            actual_damage = player.take_damage(modified_damage)
             log.append(f"{player.name}に{actual_damage}ダメージ！")
+
             if "effect" in action_data:
                 player.apply_status(action_data["effect"], action_data.get("effect_power", 1))
                 log.append(f"{player.name}は{STATUS_EFFECTS[action_data['effect']]['name']}になった！")
@@ -101,10 +108,10 @@ class ActionHandler:
             if action.get("damage_type") == "physical":
                 base_power += player.attack_power
             
-            if "weak" in player.status_effects:
-                base_power = math.ceil(base_power * STATUS_EFFECTS["weak"]["value"])
-            
-            return base_power
+            # ステータス効果で修飾された最終的なダメージを計算
+            final_power = StatusEffectProcessor.modify_outgoing_damage(player, base_power)
+            return final_power
+
         elif action_id == "guard": # "防御"カード
             return power + player.defense_power
         
