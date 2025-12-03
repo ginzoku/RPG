@@ -34,7 +34,15 @@ class EnemyManager:
         
         self.enemies.sort(key=lambda e: e.x)
         for enemy in self.enemies:
-            enemy.decide_next_action()
+            # 敵の行動決定とターゲット設定
+            action_id = enemy.decide_next_action()
+            action_data = MONSTER_ACTIONS.get(action_id, {})
+            first_effect = action_data.get("effects", [{}])[0]
+            target_scope = first_effect.get("target_scope")
+            if target_scope == "all":
+                enemy.targets = [self.player]
+            else: # single, self
+                enemy.targets = [self.player]
 
     def update_turn(self) -> list[str]:
         """敵のターンを更新し、ログメッセージを返す"""
