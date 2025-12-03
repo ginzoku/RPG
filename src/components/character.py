@@ -16,9 +16,12 @@ class Character:
         self.defense_power: int = 0
         self.x: int = x
         self.y: int = y
+        self.base_attack_power: int = attack_power
+        self.base_defense_power: int = 0
         self.is_alive: bool = True
         self.defense_buff: int = 0 # 防御によるダメージ減少量
         self.status_effects: dict[str, int] = {} # key: status_id, value: turns
+        self.permanent_effects: list[str] = [] # 消去不可の永続効果
         self.relics: list[str] = ["red_stone"] # 初期レリック
         self.is_targeted: bool = False # ターゲット選択時にハイライトするためのフラグ
         self.gold: int = 0 # 所持ゴールド
@@ -54,6 +57,16 @@ class Character:
 
         return actual_damage # 実際に与えたダメージ量を返す
     
+    def take_direct_damage(self, damage: int):
+        """防御や効果を無視して直接HPにダメージを受ける"""
+        self.current_hp -= damage
+        if self.current_hp <= 0:
+            self.current_hp = 0
+            self.is_alive = False
+        
+        # ダメージを受けた後の効果を処理（バリア解除など）
+        StatusEffectProcessor.process_damage_taken(self, damage)
+
     def take_sanity_damage(self, damage: int) -> int:
         """正気度にダメージを受ける。正気度が0になったら死亡する。"""
         if self.current_sanity is None:
@@ -103,6 +116,9 @@ class Character:
 
     def reset_for_battle(self):
         """戦闘開始時にプレイヤーの状態をリセットする"""
+        self.attack_power = self.base_attack_power
+        self.defense_power = self.base_defense_power
         self.fully_recover_mana()
         self.defense_buff = 0
         self.status_effects.clear()
+        self.permanent_effects.clear()

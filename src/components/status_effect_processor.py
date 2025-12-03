@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 import math
 
 from ..data.status_effect_data import STATUS_EFFECTS
+from ..data.permanent_effect_data import PERMANENT_EFFECTS
 
 if TYPE_CHECKING:
     from .character import Character
@@ -44,6 +45,14 @@ class StatusEffectProcessor:
     @staticmethod
     def process_end_of_turn(character: Character):
         """ターン終了時の効果を処理し、ターン数を減少させる"""
+        # 永続効果の処理
+        for effect_id in character.permanent_effects:
+            effect_data = PERMANENT_EFFECTS.get(effect_id, {})
+            if effect_data.get("type") == "end_of_turn_direct_damage":
+                damage = effect_data.get("value", 0)
+                character.take_direct_damage(damage)
+
+        # 状態異常の処理
         for status_id in list(character.status_effects.keys()):
             status_data = STATUS_EFFECTS.get(status_id, {})
             

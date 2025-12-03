@@ -5,6 +5,7 @@ from .character import Character
 from .deck_manager import DeckManager
 from ..data.action_data import ACTIONS
 from ..data.monster_action_data import MONSTER_ACTIONS
+from ..data.permanent_effect_data import PERMANENT_EFFECTS
 from ..data.status_effect_data import STATUS_EFFECTS
 from .status_effect_processor import StatusEffectProcessor
 
@@ -77,6 +78,20 @@ class ActionHandler:
         elif effect_type == "sanity_damage":
             target_character.take_sanity_damage(effect.get("power", 0))
 
+        elif effect_type == "stat_change":
+            stat_to_change = effect.get("stat")
+            value = effect.get("value", 0)
+            if hasattr(target_character, stat_to_change):
+                current_value = getattr(target_character, stat_to_change)
+                setattr(target_character, stat_to_change, current_value + value)
+                # 最大マナが増えた場合、現在マナも増やす
+                if stat_to_change == "max_mana":
+                    target_character.recover_mana(value)
+
+        elif effect_type == "apply_permanent_effect":
+            effect_id = effect.get("effect_id")
+            if effect_id and effect_id not in target_character.permanent_effects:
+                target_character.permanent_effects.append(effect_id)
 
     @staticmethod
     def get_card_display_power(player: Character, action_id: str) -> int | None:

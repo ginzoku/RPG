@@ -4,6 +4,7 @@ import math
 from ...components.character import Character
 from ...config import settings
 from ...data.status_effect_data import STATUS_EFFECTS
+from ...data.permanent_effect_data import PERMANENT_EFFECTS
 from ...data.monster_action_data import MONSTER_ACTIONS
 
 class CharacterStatusDrawer:
@@ -68,6 +69,67 @@ class CharacterStatusDrawer:
         status_offset_x = 0
         
         font = self.fonts["card"]
+
+        # 攻撃力・防御力変化の描画
+        stat_changes = {
+            "attack": character.attack_power - character.base_attack_power,
+            "defense": character.defense_power - character.base_defense_power
+        }
+
+        for stat_name, diff in stat_changes.items():
+            if diff == 0:
+                continue
+
+            icon_char, base_color = ("A", settings.RED) if stat_name == "attack" else ("D", settings.BLUE)
+            text_color = settings.GREEN if diff > 0 else settings.RED
+            
+            center_x = x + status_offset_x + icon_radius
+            center_y = y + icon_radius
+            icon_rect = pygame.Rect(center_x - icon_radius, center_y - icon_radius, icon_radius * 2, icon_radius * 2)
+
+            # アイコン背景
+            pygame.draw.circle(screen, base_color, (center_x, center_y), icon_radius)
+            pygame.draw.circle(screen, settings.WHITE, (center_x, center_y), icon_radius, 1)
+
+            # アイコン文字 (A or D)
+            icon_text = self.fonts["small"].render(icon_char, True, settings.WHITE)
+            text_rect = icon_text.get_rect(center=(center_x, center_y))
+            screen.blit(icon_text, text_rect)
+
+            # 数値
+            diff_text_str = f"+{diff}" if diff > 0 else str(diff)
+            diff_text = font.render(diff_text_str, True, text_color)
+            diff_rect = diff_text.get_rect(midleft=(center_x + icon_radius + 3, center_y))
+            screen.blit(diff_text, diff_rect)
+
+            current_icon_width = icon_radius * 2 + icon_gap + diff_text.get_width()
+            status_offset_x += current_icon_width
+
+            # if mouse_pos and icon_rect.collidepoint(mouse_pos):
+            #     self._draw_tooltip(screen, {"name": "攻撃力" if stat_name == "attack" else "防御力", "description": f"基本値から{diff:+}されています。"}, icon_rect.centerx, icon_rect.top)
+
+        # 永続効果の描画
+        for effect_id in character.permanent_effects:
+            effect_data = PERMANENT_EFFECTS.get(effect_id)
+            if not effect_data: continue
+
+            icon_char = effect_data.get("icon", "?")
+            color = effect_data.get("color", settings.WHITE)
+
+            center_x = x + status_offset_x + icon_radius
+            center_y = y + icon_radius
+            icon_rect = pygame.Rect(center_x - icon_radius, center_y - icon_radius, icon_radius * 2, icon_radius * 2)
+
+            pygame.draw.circle(screen, color, (center_x, center_y), icon_radius)
+            pygame.draw.circle(screen, settings.BLACK, (center_x, center_y), icon_radius, 1)
+
+            icon_text = self.fonts["small"].render(icon_char, True, settings.BLACK)
+            text_rect = icon_text.get_rect(center=(center_x, center_y))
+            screen.blit(icon_text, text_rect)
+
+            status_offset_x += icon_radius * 2 + icon_gap
+            if mouse_pos and icon_rect.collidepoint(mouse_pos):
+                self._draw_tooltip(screen, effect_data, icon_rect.centerx, icon_rect.top)
 
         for status_id, turns in character.status_effects.items():
             status_data = STATUS_EFFECTS.get(status_id)

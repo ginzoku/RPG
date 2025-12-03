@@ -119,5 +119,17 @@ ACTIONS = {
         "effects": [
             {"type": "damage", "target_scope": "all", "power": 10, "hits": 2}
         ]
+    },
+    "forbidden_pact": {
+        "name": "禁断の契約",
+        "cost": 1,
+        "exhaust": True,
+        "description": "攻撃力と防御力が永続的に5、最大マナが1増える。ターン終了時に10のHPを失うようになる（防御不可）。",
+        "effects": [
+            {"type": "stat_change", "target_scope": "self", "stat": "attack_power", "value": 5},
+            {"type": "stat_change", "target_scope": "self", "stat": "defense_power", "value": 5},
+            {"type": "stat_change", "target_scope": "self", "stat": "max_mana", "value": 1},
+            {"type": "apply_permanent_effect", "target_scope": "self", "effect_id": "blood_pact"}
+        ]
     }
 }
