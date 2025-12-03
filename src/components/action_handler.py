@@ -10,74 +10,73 @@ from .status_effect_processor import StatusEffectProcessor
 
 class ActionHandler:
     @staticmethod
-    def execute_player_action(player: Character, enemy: Character, action_id: str, deck_manager: DeckManager) -> list[str]:
+    def execute_player_action(player: Character, targets: list[Character], action_id: str, deck_manager: DeckManager) -> list[str]:
         action = ACTIONS[action_id]
 
         if not player.use_mana(action["cost"]):
             return [] # マナが足りない場合は何もせずに終了
 
         for effect in action.get("effects", []):
-            effect_type = effect["type"]
-            target_char_name = effect.get("target", "enemy")
-            target_character = None
-            if target_char_name == "self":
-                target_character = player
-            elif target_char_name == "enemy":
-                if enemy is None: # 敵が指定されていない場合、敵を対象とする効果はスキップ
-                    continue
-                target_character = enemy
-            else: # 未知のターゲットタイプ
-                continue
-
-            if effect_type == "damage":
-                damage_type = effect.get("damage_type", "physical")
-                if damage_type == "physical":
-                    base_damage = effect["power"] + player.attack_power
-                    modified_damage = StatusEffectProcessor.modify_outgoing_damage(player, base_damage)
-                    damage_variance = random.randint(-int(modified_damage * 0.1), int(modified_damage * 0.1))
-                    final_damage = max(1, modified_damage + damage_variance)
-                    target_character.take_damage(final_damage)
-                elif damage_type == "magical":
-                    damage = effect["power"]
-                    target_character.take_damage(damage)
-            
-            elif effect_type == "gain_defense":
-                gained_defense = effect["power"] + player.defense_power
-                target_character.defense_buff += gained_defense
-
-            elif effect_type == "apply_status":
-                status_id = effect["status_id"]
-                turns = effect.get("turns", 1)
-                target_character.apply_status(status_id, turns)
-
-            elif effect_type == "draw_card":
-                num_to_draw = effect.get("power", 1)
-                deck_manager.draw_cards(num_to_draw)
+            ActionHandler._process_effect(player, targets, effect, deck_manager)
 
         return []
 
     @staticmethod
-    def execute_monster_action(monster: Character, player: Character, action_id: str) -> list[str]:
+    def execute_monster_action(monster: Character, targets: list[Character], action_id: str) -> list[str]:
         action_data = MONSTER_ACTIONS[action_id]
-
         for effect in action_data.get("effects", []):
-            effect_type = effect["type"]
-            target_character = player if effect.get("target") == "player" else monster
-
-            if effect_type == "damage":
-                damage_type = effect.get("damage_type", "physical")
-                if damage_type == "physical":
-                    base_damage = int(monster.attack_power * effect["power"])
-                    modified_damage = StatusEffectProcessor.modify_outgoing_damage(monster, base_damage)
-                    target_character.take_damage(modified_damage)
-                elif damage_type == "magical":
-                    target_character.take_damage(effect["power"])
-            elif effect_type == "apply_status":
-                target_character.apply_status(effect["status_id"], effect.get("turns", 1))
-            elif effect_type == "sanity_damage":
-                target_character.take_sanity_damage(effect.get("power", 0))
+            ActionHandler._process_effect(monster, targets, effect)
 
         return []
+
+    @staticmethod
+    def _process_effect(source: Character, targets: list[Character], effect: dict, deck_manager: DeckManager | None = None):
+        effect_type = effect.get("type")
+        if effect_type == "pass": return
+
+        hits = effect.get("hits", 1)
+
+        for _ in range(hits):
+            # 毎ヒットごとにターゲットが生きているか確認
+            alive_targets = [t for t in targets if t.is_alive]
+            if not alive_targets: break
+
+            for target_character in alive_targets:
+                ActionHandler._apply_single_effect(source, target_character, effect, deck_manager)
+
+    @staticmethod
+    def _apply_single_effect(source: Character, target_character: Character, effect: dict, deck_manager: DeckManager | None = None):
+        from ..components.monster import Monster
+        effect_type = effect.get("type")
+
+        if effect_type == "damage":
+            power = effect.get("power", 0)
+            # モンスターの場合、powerは倍率として扱う。プレイヤーは加算。
+            base_damage = int(source.attack_power * power) if isinstance(source, Monster) else (power + source.attack_power)
+            
+            # ステータス効果によるダメージ修飾
+            modified_damage = StatusEffectProcessor.modify_outgoing_damage(source, base_damage)
+            
+            # 最終ダメージ（揺らぎなし）
+            final_damage = max(1, modified_damage)
+            target_character.take_damage(final_damage)
+        
+        elif effect_type == "gain_defense":
+            gained_defense = effect.get("power", 0) + source.defense_power
+            target_character.defense_buff += gained_defense
+
+        elif effect_type == "apply_status":
+            status_id = effect["status_id"]
+            turns = effect.get("turns", 1)
+            target_character.apply_status(status_id, turns)
+
+        elif effect_type == "draw_card" and deck_manager:
+            num_to_draw = effect.get("power", 1)
+            deck_manager.draw_cards(num_to_draw)
+        
+        elif effect_type == "sanity_damage":
+            target_character.take_sanity_damage(effect.get("power", 0))
+
 
     @staticmethod
     def get_card_display_power(player: Character, action_id: str) -> int | None:
@@ -96,9 +95,7 @@ class ActionHandler:
 
             if effect_type == "damage":
                 base_power = power
-                if effect.get("damage_type") == "physical":
-                    base_power += player.attack_power
-                
+                base_power += player.attack_power
                 # ステータス効果で修飾された最終的なダメージを計算
                 final_power = StatusEffectProcessor.modify_outgoing_damage(player, base_power)
                 return final_power

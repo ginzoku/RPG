@@ -192,18 +192,25 @@ class CharacterStatusDrawer:
             if effect_type == "damage":
                 power = first_effect.get("power", 0)
                 damage_type = first_effect.get("damage_type", "physical")
+                hits = first_effect.get("hits", 1)
                 damage = 0
                 if damage_type == "physical":
                     damage = int(monster.attack_power * power)
                 elif damage_type == "magical":
                     damage = power
                 
-                intent_text = str(damage)
+                intent_text = f"{damage}x{hits}" if hits > 1 else str(damage)
                 text_color = settings.RED
                 icon = "⚔"
+
+                # 全体攻撃の場合アイコンを変更
+                if first_effect.get("target_scope") == "all":
+                    icon = "⚔" # ここは後で全体攻撃用アイコンに変えても良い
+
                 # 2つ目以降の効果にデバフがあればアイコンを変更
                 if any(e.get("type") == "apply_status" and STATUS_EFFECTS.get(e.get("status_id"), {}).get("is_debuff") for e in effects[1:]):
                     icon = "⚔↓" # 例: 攻撃+デバフ
+
 
             elif effect_type == "sanity_damage":
                 intent_text = str(first_effect.get("power", 0))

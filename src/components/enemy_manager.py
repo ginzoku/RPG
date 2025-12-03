@@ -57,10 +57,9 @@ class EnemyManager:
             if not enemy.is_animating:
                 # 行動の実行とアニメーション開始
                 action_id = enemy.next_action or enemy.choose_action()
-                action_data = MONSTER_ACTIONS.get(action_id, {})
-                intent_type = action_data.get("intent_type", "unknown")
+                intent_type = MONSTER_ACTIONS.get(action_id, {}).get("intent_type", "unknown")
 
-                log_messages.extend(ActionHandler.execute_monster_action(enemy, self.player, action_id))
+                log_messages.extend(ActionHandler.execute_monster_action(enemy, enemy.targets, action_id))
 
                 enemy.animation_type = "shake"
                 if intent_type in ["attack", "attack_debuff"]:

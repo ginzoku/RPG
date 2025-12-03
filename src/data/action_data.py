@@ -6,7 +6,7 @@ ACTIONS = {
         "cost": 1,
         "description": "敵に{power}の物理ダメージを与える。",
         "effects": [
-            {"type": "damage", "target": "enemy", "damage_type": "physical", "power": 7}
+            {"type": "damage", "target_scope": "single", "power": 7, "hits": 1}
         ]
     },
     "strong_slash": {
@@ -14,7 +14,7 @@ ACTIONS = {
         "cost": 2,
         "description": "敵に{power}の物理ダメージを与える。",
         "effects": [
-            {"type": "damage", "target": "enemy", "damage_type": "physical", "power": 23}
+            {"type": "damage", "target_scope": "single", "power": 23, "hits": 1}
         ]
     },
     "fire_ball": {
@@ -22,7 +22,7 @@ ACTIONS = {
         "cost": 2,
         "description": "敵に{power}の魔法ダメージを与える。",
         "effects": [
-            {"type": "damage", "target": "enemy", "damage_type": "magical", "power": 16}
+            {"type": "damage", "target_scope": "single", "power": 16, "hits": 1}
         ]
     },
     "guard": {
@@ -30,21 +30,21 @@ ACTIONS = {
         "cost": 1,
         "description": "次に受けるダメージを{power}軽減する。",
         "effects": [
-            {"type": "gain_defense", "target": "self", "power": 10}
+            {"type": "gain_defense", "target_scope": "self", "power": 10}
         ]
     },
     "pass": {
         "name": "パス",
         "cost": 0,
         "description": "何もせずにターンを終了する。",
-        "effects": []
+        "effects": [{"type": "pass"}]
     },
     "expose_weakness": {
         "name": "弱点暴露",
         "cost": 1,
         "description": "敵に「無防備」を{power}ターン付与する。\n(受けるダメージが1.5倍になる)",
         "effects": [
-            {"type": "apply_status", "target": "enemy", "status_id": "vulnerable", "turns": 2}
+            {"type": "apply_status", "target_scope": "single", "status_id": "vulnerable", "turns": 2}
         ]
     },
     "healing_light": {
@@ -52,7 +52,7 @@ ACTIONS = {
         "cost": 2,
         "description": "自分に「再生」を{power}ターン付与する。\n(ターン終了時にHPが5回復)",
         "effects": [
-            {"type": "apply_status", "target": "self", "status_id": "regeneration", "turns": 3}
+            {"type": "apply_status", "target_scope": "self", "status_id": "regeneration", "turns": 3}
         ]
     },
     "poison_sting": {
@@ -60,7 +60,7 @@ ACTIONS = {
         "cost": 1,
         "description": "敵に「毒」を{power}ターン付与する。\n(ターン終了時にHPが5減少)",
         "effects": [
-            {"type": "apply_status", "target": "enemy", "status_id": "poison", "turns": 3}
+            {"type": "apply_status", "target_scope": "single", "status_id": "poison", "turns": 3}
         ]
     },
     "apply_barrier": {
@@ -68,7 +68,7 @@ ACTIONS = {
         "cost": 2,
         "description": "「バリア」を永続的に展開する。\n(ダメージを受けると解除)",
         "effects": [
-            {"type": "apply_status", "target": "self", "status_id": "barrier", "turns": -1}
+            {"type": "apply_status", "target_scope": "self", "status_id": "barrier", "turns": -1}
         ]
     },
     "apply_focus": {
@@ -76,7 +76,7 @@ ACTIONS = {
         "cost": 1,
         "description": "「集中」状態になり、次の攻撃を強化する。\n(デバフを受けると解除)",
         "effects": [
-            {"type": "apply_status", "target": "self", "status_id": "focus", "turns": -1}
+            {"type": "apply_status", "target_scope": "self", "status_id": "focus", "turns": -1}
         ]
     },
     "draw_card": {
@@ -84,7 +84,7 @@ ACTIONS = {
         "cost": 1,
         "description": "カードを{power}枚引く。",
         "effects": [
-            {"type": "draw_card", "power": 2}
+            {"type": "draw_card", "target_scope": "self", "power": 2}
         ]
     },
     "obliterate": {
@@ -93,7 +93,31 @@ ACTIONS = {
         "exhaust": True,
         "description": "敵に{power}の物理ダメージを与える。このカードは廃棄される。",
         "effects": [
-            {"type": "damage", "target": "enemy", "damage_type": "physical", "power": 30}
+            {"type": "damage", "target_scope": "single", "power": 30, "hits": 1}
+        ]
+    },
+    "multi_slash": {
+        "name": "乱れ斬り",
+        "cost": 2,
+        "description": "敵単体に{power}の物理ダメージを3回与える。",
+        "effects": [
+            {"type": "damage", "target_scope": "single", "power": 8, "hits": 3}
+        ]
+    },
+    "sweep": {
+        "name": "薙ぎ払い",
+        "cost": 2,
+        "description": "敵全体に{power}の物理ダメージを与える。",
+        "effects": [
+            {"type": "damage", "target_scope": "all", "power": 12, "hits": 1}
+        ]
+    },
+    "meteor": {
+        "name": "流星群",
+        "cost": 3,
+        "description": "敵全体に{power}の魔法ダメージを2回与える。",
+        "effects": [
+            {"type": "damage", "target_scope": "all", "power": 10, "hits": 2}
         ]
     }
 }

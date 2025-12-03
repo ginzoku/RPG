@@ -95,24 +95,27 @@ class BattleScene:
         action_id = self.deck_manager.hand[card_index]
         action = ACTIONS[action_id]
 
-        selected_enemy = None
-        if self.targeted_enemy_index is not None and self.enemy_manager.enemies[self.targeted_enemy_index].is_alive:
-            selected_enemy = self.enemy_manager.enemies[self.targeted_enemy_index]
+        targets = []
+        # 最初の効果のtarget_scopeに基づいてターゲットを決定する
+        first_effect = action.get("effects", [{}])[0]
+        target_scope = first_effect.get("target_scope")
 
-        # カードが敵をターゲットとする効果を持つかチェック
-        requires_enemy_target = False
-        for effect in action.get("effects", []):
-            # effectにtargetが指定されていない場合、デフォルトで"enemy"とみなす
-            if effect.get("target", "enemy") == "enemy":
-                requires_enemy_target = True
-                break
+        if target_scope == "self":
+            targets = [self.player]
+        elif target_scope == "single":
+            if self.targeted_enemy_index is not None and self.enemy_manager.enemies[self.targeted_enemy_index].is_alive:
+                targets = [self.enemy_manager.enemies[self.targeted_enemy_index]]
+        elif target_scope == "all":
+            targets = [enemy for enemy in self.enemy_manager.enemies if enemy.is_alive]
 
-        # 敵をターゲットとする効果があり、かつターゲットが選択されていない場合は実行不可
-        if requires_enemy_target and selected_enemy is None:
+        # ターゲットが必要なのに選択されていない場合は実行しない
+        if not targets and target_scope not in ["self", None]:
             return
 
         # アクションを実行。ActionHandlerが各効果のターゲットを適切に処理する
-        ActionHandler.execute_player_action(self.player, selected_enemy, action_id, self.deck_manager)
+        # 注意: ここでは最初の効果のターゲットリストを渡している。
+        # 1アクションに複数のtarget_scopeが混在する場合は、ActionHandler側でのさらなる修正が必要。
+        ActionHandler.execute_player_action(self.player, targets, action_id, self.deck_manager)
 
         self.deck_manager.move_used_card(card_index)
         self.hovered_card_index = None # ホバー状態をリセット
@@ -132,7 +135,15 @@ class BattleScene:
             if self.enemy_manager.turn_state == "finished":
                 # 敵のターン終了処理
                 for enemy in self.enemy_manager.enemies:
-                    enemy.decide_next_action()
+                    # 敵の行動決定とターゲット設定
+                    action_id = enemy.decide_next_action()
+                    action_data = MONSTER_ACTIONS.get(action_id, {})
+                    first_effect = action_data.get("effects", [{}])[0]
+                    target_scope = first_effect.get("target_scope")
+                    if target_scope == "all":
+                        enemy.targets = [self.player] # 将来的に味方が増える場合はリストにする
+                    else: # single, self
+                        enemy.targets = [self.player]
                     enemy.decrement_status_effects()
                 
                 # プレイヤーの防御値をリセット

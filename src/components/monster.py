@@ -9,6 +9,7 @@ class Monster(Character):
         self.actions = actions
         self.gold = gold
         self.next_action: str | None = None
+        self.targets: list[Character] = []
         
         # アニメーション用属性
         self.is_animating: bool = False
@@ -22,6 +23,7 @@ class Monster(Character):
             return "wait" # 行動がなければ何もしない
         return random.choice(self.actions)
     
-    def decide_next_action(self):
+    def decide_next_action(self) -> str:
         """次の行動を決定し、保持する"""
         self.next_action = self.choose_action()
+        return self.next_action

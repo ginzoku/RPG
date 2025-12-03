@@ -4,7 +4,7 @@ from ..data.action_data import ACTIONS
 
 class DeckManager:
     def __init__(self):
-        initial_deck = (["slash"] * 5) + (["guard"] * 5) + (["fire_ball"] * 1) + (["expose_weakness"] * 1) + (["healing_light"] * 1) + (["draw_card"] * 1) + ["obliterate"]
+        initial_deck = (["slash"] * 5) + (["guard"] * 5) + (["fire_ball"] * 1) + (["expose_weakness"] * 1) + (["healing_light"] * 1) + (["draw_card"] * 1) + ["obliterate"] + ["multi_slash", "sweep"]
         self.deck: list[str] = list(initial_deck)
         self.hand: list[str] = []
         self.discard_pile: list[str] = []

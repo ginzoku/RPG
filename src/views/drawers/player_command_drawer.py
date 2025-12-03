@@ -83,15 +83,25 @@ class PlayerCommandDrawer:
         if power is not None:
             # 効果のタイプに応じて色を決定
             effect_type = action.get("effects", [{}])[0].get("type")
+            hits = action.get("effects", [{}])[0].get("hits", 1)
             color = settings.BLUE # デフォルト
             if effect_type == "damage": color = settings.RED
-            self._draw_power_circle(screen, power, card_rect, color)
+            self._draw_power_circle(screen, power, card_rect, color, hits=hits)
 
-    def _draw_power_circle(self, screen: pygame.Surface, power: int, card_rect: pygame.Rect, color: tuple, power_circle_radius: int = 16):
+    def _draw_power_circle(self, screen: pygame.Surface, power: int, card_rect: pygame.Rect, color: tuple, power_circle_radius: int = 16, hits: int = 1):
         power_circle_center = (card_rect.right - power_circle_radius - 5, card_rect.bottom - power_circle_radius - 5)
         pygame.draw.circle(screen, color, power_circle_center, power_circle_radius)
         pygame.draw.circle(screen, settings.WHITE, power_circle_center, power_circle_radius, 1)
-        power_text = self.fonts["card"].render(str(power), True, settings.WHITE)
+        
+        display_text = str(power)
+        font = self.fonts["card"]
+        if hits > 1:
+            display_text = f"{power}x{hits}"
+            # 文字数が多い場合はフォントを小さくする
+            if len(display_text) > 3:
+                font = self.fonts["small"]
+
+        power_text = font.render(display_text, True, settings.WHITE)
         power_text_rect = power_text.get_rect(center=power_circle_center)
         screen.blit(power_text, power_text_rect)
 
@@ -143,9 +153,10 @@ class PlayerCommandDrawer:
         if power is not None:
             # 効果のタイプに応じて色を決定
             effect_type = action.get("effects", [{}])[0].get("type")
+            hits = action.get("effects", [{}])[0].get("hits", 1)
             color = settings.BLUE # デフォルト
             if effect_type == "damage": color = settings.RED
-            self._draw_power_circle(screen, power, card_rect, color, 24)
+            self._draw_power_circle(screen, power, card_rect, color, 24, hits=hits)
 
     def _draw_text_multiline(self, surface, text, font, rect, color):
         """指定された矩形内にテキストを自動で折り返して描画する"""
@@ -165,34 +176,3 @@ class PlayerCommandDrawer:
                 pos[0] += word_width + space_width
             pos[0] = rect.left
             pos[1] += word_height
-
-    def _draw_power_circle(self, screen: pygame.Surface, power: int, card_rect: pygame.Rect, color: tuple, power_circle_radius: int = 16):
-        power_circle_center = (card_rect.right - power_circle_radius - 5, card_rect.bottom - power_circle_radius - 5)
-        pygame.draw.circle(screen, color, power_circle_center, power_circle_radius)
-        pygame.draw.circle(screen, settings.WHITE, power_circle_center, power_circle_radius, 1)
-        power_text = self.fonts["card"].render(str(power), True, settings.WHITE)
-        power_text_rect = power_text.get_rect(center=power_circle_center)
-        screen.blit(power_text, power_text_rect)
-
-    def _draw_enlarged_card(self, screen: pygame.Surface, battle_state: BattleScene, action_id: str):
-        action = ACTIONS[action_id]
-        
-        card_width = 240
-        card_height = 340
-        card_x = (screen.get_width() - card_width) / 2
-        card_y = (screen.get_height() - card_height) / 2 - 50
-        card_rect = pygame.Rect(card_x, card_y, card_width, card_height)
-
-        # 背景と枠線
-        pygame.draw.rect(screen, (60, 60, 80), card_rect, border_radius=10)
-        pygame.draw.rect(screen, settings.WHITE, card_rect, 3, border_radius=10)
-
-        # アクション名
-        # MPコスト表示エリアを除いたカードの中央に配置する
-        cost_circle_radius = 24
-        cost_area_right_edge = card_rect.left + (cost_circle_radius * 2) + 20 # コスト円の右端+余白
-        name_area_center_x = cost_area_right_edge + (card_rect.right - cost_area_right_edge) / 2
-
-        name_text = self.fonts["small"].render(action["name"], True, settings.WHITE)
-        name_rect = name_text.get_rect(centerx=name_area_center_x, y=card_rect.top + 20)
-        screen.blit(name_text, name_rect)
