@@ -176,32 +176,41 @@ class CharacterStatusDrawer:
         if not action_data:
             return
 
-        intent_type = action_data.get("intent_type", "unknown")
         intent_text = ""
         text_color = settings.WHITE # デフォルトの色
         icon = "?" # デフォルト
 
-        if intent_type == "attack":
-            power = action_data["power"]
-            damage = int(monster.attack_power * power)
-            intent_text = str(damage)
-            text_color = settings.RED # 物理ダメージは赤
-            icon = "⚔"
-        elif intent_type == "sanity_attack":
-            power = action_data["power"]
-            intent_text = str(power)
-            text_color = settings.YELLOW # 正気度ダメージは黄色
-            icon = "⚔"
-        elif intent_type == "attack_debuff":
-            power = action_data["power"]
-            damage = int(monster.attack_power * power)
-            intent_text = str(damage)
-            text_color = settings.RED # 物理＋デバフも赤
-            icon = "⚔" # アイコンは攻撃と同じ
-        elif intent_type == "debuff":
-            icon = "↓"
-        elif intent_type == "unknown":
+        # 最初の効果に基づいてインテントを決定する
+        effects = action_data.get("effects", [])
+        if not effects:
             text_color = settings.LIGHT_GRAY
+            icon = "?"
+        else:
+            first_effect = effects[0]
+            effect_type = first_effect.get("type")
+
+            if effect_type == "damage":
+                power = first_effect.get("power", 0)
+                damage_type = first_effect.get("damage_type", "physical")
+                damage = 0
+                if damage_type == "physical":
+                    damage = int(monster.attack_power * power)
+                elif damage_type == "magical":
+                    damage = power
+                
+                intent_text = str(damage)
+                text_color = settings.RED
+                icon = "⚔"
+                # 2つ目以降の効果にデバフがあればアイコンを変更
+                if any(e.get("type") == "apply_status" and STATUS_EFFECTS.get(e.get("status_id"), {}).get("is_debuff") for e in effects[1:]):
+                    icon = "⚔↓" # 例: 攻撃+デバフ
+
+            elif effect_type == "sanity_damage":
+                intent_text = str(first_effect.get("power", 0))
+                text_color = settings.YELLOW
+                icon = "⚔"
+            elif effect_type == "apply_status" and STATUS_EFFECTS.get(first_effect.get("status_id"), {}).get("is_debuff"):
+                icon = "↓"
 
         full_text = f"{icon} {intent_text}"
         text_surface = self.fonts["medium"].render(full_text, True, text_color)

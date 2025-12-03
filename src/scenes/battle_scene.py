@@ -95,20 +95,24 @@ class BattleScene:
         action_id = self.deck_manager.hand[card_index]
         action = ACTIONS[action_id]
 
-        target_enemy = None
+        selected_enemy = None
         if self.targeted_enemy_index is not None and self.enemy_manager.enemies[self.targeted_enemy_index].is_alive:
-            target_enemy = self.enemy_manager.enemies[self.targeted_enemy_index]
+            selected_enemy = self.enemy_manager.enemies[self.targeted_enemy_index]
 
-        # 攻撃カードの場合、ターゲットが必要
-        if action["type"] == "attack":
-            if not target_enemy:
-                return
-            ActionHandler.execute_player_action(self.player, target_enemy, action_id, self.deck_manager)
-        # 攻撃以外（スキルなど）なら即時実行
-        else:
-            dummy_target = target_enemy or next((e for e in self.enemy_manager.enemies if e.is_alive), None)
-            if not dummy_target: return # 実行対象がいない
-            ActionHandler.execute_player_action(self.player, dummy_target, action_id, self.deck_manager)
+        # カードが敵をターゲットとする効果を持つかチェック
+        requires_enemy_target = False
+        for effect in action.get("effects", []):
+            # effectにtargetが指定されていない場合、デフォルトで"enemy"とみなす
+            if effect.get("target", "enemy") == "enemy":
+                requires_enemy_target = True
+                break
+
+        # 敵をターゲットとする効果があり、かつターゲットが選択されていない場合は実行不可
+        if requires_enemy_target and selected_enemy is None:
+            return
+
+        # アクションを実行。ActionHandlerが各効果のターゲットを適切に処理する
+        ActionHandler.execute_player_action(self.player, selected_enemy, action_id, self.deck_manager)
 
         self.deck_manager.move_used_card(card_index)
         self.hovered_card_index = None # ホバー状態をリセット

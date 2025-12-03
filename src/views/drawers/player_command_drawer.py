@@ -81,7 +81,10 @@ class PlayerCommandDrawer:
         # 右下: 威力または防御値の表示
         power = ActionHandler.get_card_display_power(battle_state.player, action_id)
         if power is not None:
-            color = settings.RED if action["type"] == "attack" else settings.BLUE
+            # 効果のタイプに応じて色を決定
+            effect_type = action.get("effects", [{}])[0].get("type")
+            color = settings.BLUE # デフォルト
+            if effect_type == "damage": color = settings.RED
             self._draw_power_circle(screen, power, card_rect, color)
 
     def _draw_power_circle(self, screen: pygame.Surface, power: int, card_rect: pygame.Rect, color: tuple, power_circle_radius: int = 16):
@@ -116,7 +119,10 @@ class PlayerCommandDrawer:
         screen.blit(name_text, name_rect)
 
         # 説明文
-        description = action.get("description", "").format(power=action.get("power", ""))
+        # 最初の効果のpowerをdescriptionに埋め込む
+        power_for_desc = ""
+        if action.get("effects"): power_for_desc = action["effects"][0].get("power", "")
+        description = action.get("description", "").format(power=power_for_desc)
         # 説明文の描画領域をアクション名の下に設定
         description_rect = pygame.Rect(card_rect.x + 20, name_rect.bottom + 10, card_rect.width - 40, card_rect.height - name_rect.height - 80)
         self._draw_text_multiline(screen, description, self.fonts["card"], description_rect, settings.WHITE)
@@ -135,7 +141,10 @@ class PlayerCommandDrawer:
         # 右下: 威力または防御値
         power = ActionHandler.get_card_display_power(battle_state.player, action_id)
         if power is not None:
-            color = settings.RED if action["type"] == "attack" else settings.BLUE
+            # 効果のタイプに応じて色を決定
+            effect_type = action.get("effects", [{}])[0].get("type")
+            color = settings.BLUE # デフォルト
+            if effect_type == "damage": color = settings.RED
             self._draw_power_circle(screen, power, card_rect, color, 24)
 
     def _draw_text_multiline(self, surface, text, font, rect, color):
@@ -187,52 +196,3 @@ class PlayerCommandDrawer:
         name_text = self.fonts["small"].render(action["name"], True, settings.WHITE)
         name_rect = name_text.get_rect(centerx=name_area_center_x, y=card_rect.top + 20)
         screen.blit(name_text, name_rect)
-
-        # 説明文
-        description = action.get("description", "").format(power=action.get("power", ""))
-        # 説明文の描画領域をアクション名の下に設定
-        description_rect = pygame.Rect(card_rect.x + 20, name_rect.bottom + 10, card_rect.width - 40, card_rect.height - name_rect.height - 80)
-        self._draw_text_multiline(screen, description, self.fonts["card"], description_rect, settings.WHITE)
-
-        # 左上: 消費MP
-        cost = action.get("cost", 0)
-        if cost >= 0:
-            cost_circle_radius = 24
-            cost_circle_center = (card_rect.left + cost_circle_radius + 10, card_rect.top + cost_circle_radius + 10)
-            pygame.draw.circle(screen, settings.BLUE, cost_circle_center, cost_circle_radius)
-            pygame.draw.circle(screen, settings.WHITE, cost_circle_center, cost_circle_radius, 2)
-            cost_text = self.fonts["small"].render(str(cost), True, settings.WHITE)
-            cost_text_rect = cost_text.get_rect(center=cost_circle_center)
-            screen.blit(cost_text, cost_text_rect)
-
-        # 右下: 威力または防御値
-        if action["type"] == "attack":
-            base_power = action.get("power", 0)
-            if action.get("damage_type") == "physical":
-                base_power += battle_state.player.attack_power # attack_powerを威力表示に加算
-            if "weak" in battle_state.player.status_effects:
-                base_power = math.ceil(base_power * STATUS_EFFECTS["weak"]["value"])
-            if base_power > 0:
-                self._draw_power_circle(screen, base_power, card_rect, settings.RED, 24)
-        elif action_id == "guard":
-            power = action.get("power", 0)
-            self._draw_power_circle(screen, power, card_rect, settings.BLUE, 24)
-
-    def _draw_text_multiline(self, surface, text, font, rect, color):
-        """指定された矩形内にテキストを自動で折り返して描画する"""
-        lines = text.splitlines()
-        space_width = font.size(' ')[0]
-        max_width, max_height = rect.size
-        pos = list(rect.topleft)
-        for line in lines:
-            words = line.split(' ')
-            for word in line:
-                word_surface = font.render(word, True, color)
-                word_width, word_height = word_surface.get_size()
-                if pos[0] + word_width >= rect.right:
-                    pos[0] = rect.left
-                    pos[1] += word_height
-                surface.blit(word_surface, pos)
-                pos[0] += word_width + space_width
-            pos[0] = rect.left
-            pos[1] += word_height
