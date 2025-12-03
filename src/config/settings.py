@@ -17,6 +17,7 @@ YELLOW: tuple[int, int, int] = (255, 255, 0)
 LIGHT_BLUE: tuple[int, int, int] = (100, 200, 255)
 ORANGE = (255, 165, 0)
 LIGHT_GRAY = (211, 211, 211)
+PURPLE = (128, 0, 128)
 
 # 新しく追加
 DAMAGE_RED = (255, 80, 80)

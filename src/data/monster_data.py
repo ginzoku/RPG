@@ -16,6 +16,13 @@ MONSTERS = {
         "actions": ["normal_attack", "strong_attack", "debilitating_strike"],
         "gold": 10
     },
+    "venom_spider": {
+        "name": "ヴェノムスパイダー",
+        "max_hp": 45,
+        "attack_power": 10,
+        "actions": ["normal_attack", "poison_bite"],
+        "gold": 12
+    },
     "mage": {
         "name": "魔法使い",
         "max_hp": 40,

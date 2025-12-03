@@ -23,6 +23,10 @@ ENEMY_GROUPS = {
         {"id": "goblin", "pos_index": 0},
         {"id": "goblin", "pos_index": 1},
     ],
+    "spider_duo": [
+        {"id": "venom_spider", "pos_index": 0},
+        {"id": "venom_spider", "pos_index": 1},
+    ],
     "slime_trio": [
         {"id": "slime", "pos_index": 0},
         {"id": "slime", "pos_index": 1},

@@ -41,33 +41,62 @@ class CharacterStatusDrawer:
         # --- UI要素のY座標を整理 ---
         base_y = character.y + char_height + 5
         hp_bar_y = base_y + 30  # HPテキストとHPバーの間隔
-        sanity_bar_y = hp_bar_y + 30 # HPバーと正気度バーの間隔
-        mana_orbs_y = sanity_bar_y + 30 # 正気度バーとマナの間隔
-        status_effects_y = mana_orbs_y + 30 # マナと状態異常の間隔
 
         self._draw_hp_bar(screen, character, character.x - 10, hp_bar_y, 100, 15)
         self._draw_defense_buff(screen, character, character.x - 10, hp_bar_y)
 
-        # プレイヤーの場合のみ正気度とマナを描画 (マナの有無で判定)
+        # プレイヤーの場合のみ正気度とマナを描画
         if character.max_mana > 0 and character.max_sanity is not None:
+            sanity_bar_y = hp_bar_y + 30 # HPバーと正気度バーの間隔
+            mana_orbs_y = sanity_bar_y + 30 # 正気度バーとマナの間隔
+            status_effects_y = mana_orbs_y + 30 # マナと状態異常の間隔
+
             san_text = self.fonts["small"].render(f"SAN: {character.current_sanity}/{character.max_sanity}", True, settings.WHITE)
             screen.blit(san_text, (character.x - 10, hp_bar_y + 5))
             self._draw_sanity_bar(screen, character, character.x - 10, sanity_bar_y, 100, 15)
             self._draw_mana_orbs(screen, character, character.x - 10, mana_orbs_y)
-
-        self._draw_status_effects(screen, character, character.x - 10, status_effects_y)
+            self._draw_status_effects(screen, character, character.x - 10, status_effects_y)
+        else:
+            # 敵の場合
+            status_effects_y = hp_bar_y + 25 # HPバーの下
+            self._draw_status_effects(screen, character, character.x - 10, status_effects_y)
 
         # 敵の場合のみインテントを描画
         if hasattr(character, 'next_action') and character.next_action:
             self._draw_intent(screen, character)
 
     def _draw_status_effects(self, screen: pygame.Surface, character: Character, x: int, y: int):
-        status_offset = 0
+        icon_radius = 12
+        icon_gap = 5
+        status_offset_x = 0
+        
+        font = self.fonts["card"] # 小さめのフォントを使用
+
         for status_id, turns in character.status_effects.items():
-            status_data = STATUS_EFFECTS[status_id]
-            status_text = self.fonts["small"].render(f"{status_data['name']}: {turns}", True, status_data['color'])
-            screen.blit(status_text, (x, y + status_offset))
-            status_offset += 25
+            status_data = STATUS_EFFECTS.get(status_id)
+            if not status_data:
+                continue
+
+            icon_char = status_data.get("icon", "?")
+            color = status_data.get("color", settings.WHITE)
+
+            # アイコンの円を描画
+            center_x = x + status_offset_x + icon_radius
+            center_y = y + icon_radius
+            pygame.draw.circle(screen, color, (center_x, center_y), icon_radius)
+            pygame.draw.circle(screen, settings.BLACK, (center_x, center_y), icon_radius, 1)
+
+            # アイコン文字を描画
+            icon_text = self.fonts["small"].render(icon_char, True, settings.BLACK)
+            text_rect = icon_text.get_rect(center=(center_x, center_y))
+            screen.blit(icon_text, text_rect)
+
+            # ターン数を描画
+            turns_text = font.render(str(turns), True, settings.WHITE)
+            turns_rect = turns_text.get_rect(midleft=(center_x + icon_radius + 3, center_y))
+            screen.blit(turns_text, turns_rect)
+            
+            status_offset_x += (icon_radius * 2) + icon_gap + turns_text.get_width()
 
     def _draw_hp_bar(self, screen: pygame.Surface, character: Character, x: int, y: int, width: int, height: int):
         pygame.draw.rect(screen, settings.DARK_GRAY, (x, y, width, height))

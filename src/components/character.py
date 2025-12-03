@@ -91,6 +91,10 @@ class Character:
             status_data = STATUS_EFFECTS[status_id]
             if status_data["type"] == "end_of_turn_heal":
                 self.heal(status_data["value"])
+            elif status_data["type"] == "end_of_turn_damage":
+                self.current_hp = max(0, self.current_hp - status_data["value"])
+                if self.current_hp == 0:
+                    self.is_alive = False
             
             # ターン数の減少
             self.status_effects[status_id] -= 1

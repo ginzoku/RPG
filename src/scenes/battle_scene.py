@@ -153,6 +153,5 @@ class BattleScene:
                 self.player.defense_buff = 0
                 
                 self.turn = "player"
-                self.player.decrement_status_effects()
                 if not self.deck_manager.draw_cards(5): self.add_log("山札がありません！")
                 self.player.fully_recover_mana()

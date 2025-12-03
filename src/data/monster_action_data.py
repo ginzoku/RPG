@@ -27,6 +27,16 @@ MONSTER_ACTIONS = {
         "effect_power": 1, # 1ターン付与
         "message": "{monster_name}の{action_name}！"
     },
+    "poison_bite": {
+        "name": "毒咬",
+        "type": "attack_debuff",
+        "intent_type": "attack_debuff",
+        "damage_type": "physical",
+        "power": 0.7,
+        "effect": "poison",
+        "effect_power": 3,
+        "message": "{monster_name}の{action_name}！"
+    },
     "fire_spell": {
         "name": "炎の呪文",
         "type": "attack",

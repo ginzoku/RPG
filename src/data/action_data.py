@@ -56,6 +56,15 @@ ACTIONS = {
         "cost": 2,
         "description": "自分に「再生」を{power}ターン付与する。\n(ターン終了時にHPが5回復)",
     },
+    "poison_sting": {
+        "name": "毒針",
+        "type": "skill",
+        "target": "enemy",
+        "effect": "poison",
+        "power": 3, # 3ターン付与
+        "cost": 1,
+        "description": "敵に「毒」を{power}ターン付与する。\n(ターン終了時にHPが5減少)",
+    },
     "draw_card": {
         "name": "ドロー",
         "type": "skill",
