@@ -6,7 +6,7 @@ MONSTER_ACTIONS = {
         "intent_type": "attack",
         "message": "{monster_name}の{action_name}！",
         "effects": [
-            {"type": "damage", "target_scope": "single", "power": 1.0, "hits": 1}
+            {"type": "damage", "target_scope": "single", "power": 8, "hits": 1}
         ]
     },
     "strong_attack": {
@@ -14,7 +14,7 @@ MONSTER_ACTIONS = {
         "intent_type": "attack",
         "message": "{monster_name}の{action_name}！",
         "effects": [
-            {"type": "damage", "target_scope": "single", "power": 1.5, "hits": 1}
+            {"type": "damage", "target_scope": "single", "power": 12, "hits": 1}
         ]
     },
     "debilitating_strike": {
@@ -22,7 +22,7 @@ MONSTER_ACTIONS = {
         "intent_type": "attack_debuff",
         "message": "{monster_name}の{action_name}！",
         "effects": [
-            {"type": "damage", "target_scope": "single", "power": 0.8, "hits": 1},
+            {"type": "damage", "target_scope": "single", "power": 7, "hits": 1},
             {"type": "apply_status", "target_scope": "single", "status_id": "weak", "turns": 1}
         ]
     },
@@ -31,7 +31,7 @@ MONSTER_ACTIONS = {
         "intent_type": "attack_debuff",
         "message": "{monster_name}の{action_name}！",
         "effects": [
-            {"type": "damage", "target_scope": "single", "power": 0.7, "hits": 1},
+            {"type": "damage", "target_scope": "single", "power": 6, "hits": 1},
             {"type": "apply_status", "target_scope": "single", "status_id": "poison", "turns": 3}
         ]
     },
@@ -62,7 +62,7 @@ MONSTER_ACTIONS = {
         "intent_type": "attack",
         "message": "{monster_name}は暴れまわっている！",
         "effects": [
-            {"type": "damage", "target_scope": "single", "power": 0.6, "hits": 3}
+            {"type": "damage", "target_scope": "single", "power": 4, "hits": 3}
         ]
     },
     "earthquake": {
@@ -70,7 +70,7 @@ MONSTER_ACTIONS = {
         "intent_type": "attack",
         "message": "{monster_name}が地面を揺らした！",
         "effects": [
-            {"type": "damage", "target_scope": "all", "power": 0.8, "hits": 1}
+            {"type": "damage", "target_scope": "all", "power": 8, "hits": 1}
         ]
     }
 }

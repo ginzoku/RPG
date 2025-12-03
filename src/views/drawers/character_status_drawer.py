@@ -253,14 +253,8 @@ class CharacterStatusDrawer:
 
             if effect_type == "damage":
                 power = first_effect.get("power", 0)
-                damage_type = first_effect.get("damage_type", "physical")
                 hits = first_effect.get("hits", 1)
-                damage = 0
-                if damage_type == "physical":
-                    damage = int(monster.attack_power * power)
-                elif damage_type == "magical":
-                    damage = power
-                
+                damage = power + monster.attack_power
                 intent_text = f"{damage}x{hits}" if hits > 1 else str(damage)
                 text_color = settings.RED
                 icon = "⚔"

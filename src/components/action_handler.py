@@ -52,13 +52,9 @@ class ActionHandler:
 
         if effect_type == "damage":
             power = effect.get("power", 0)
-            # モンスターの場合、powerは倍率として扱う。プレイヤーは加算。
-            base_damage = int(source.attack_power * power) if isinstance(source, Monster) else (power + source.attack_power)
-            
-            # ステータス効果によるダメージ修飾
+            # プレイヤーとモンスターのダメージ計算を統一
+            base_damage = power + source.attack_power
             modified_damage = StatusEffectProcessor.modify_outgoing_damage(source, base_damage)
-            
-            # 最終ダメージ（揺らぎなし）
             final_damage = max(1, modified_damage)
             target_character.take_damage(final_damage)
         
