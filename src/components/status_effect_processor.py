@@ -51,9 +51,7 @@ class StatusEffectProcessor:
             if status_data.get("type") == "end_of_turn_heal":
                 character.heal(status_data.get("value", 0))
             elif status_data.get("type") == "end_of_turn_damage":
-                character.current_hp = max(0, character.current_hp - status_data.get("value", 0))
-                if character.current_hp == 0:
-                    character.is_alive = False
+                character.take_damage(status_data.get("value", 0))
             
             # ターン数の減少 (永続効果でない場合)
             if character.status_effects.get(status_id, 0) != -1:
