@@ -8,9 +8,6 @@ from .views.map_view import MapView
 from .controllers.map_controller import MapController
 from .scenes.battle_scene import BattleScene # 修正
 from .views.battle_view import BattleView
-from .scenes.conversation_scene import ConversationScene
-from .views.conversation_view import ConversationView
-from .controllers.conversation_controller import ConversationController
 
 class GameController:
     def __init__(self):
@@ -29,9 +26,6 @@ class GameController:
         self.map_controller = MapController()
         self.battle_scene = BattleScene(self.player) # プレイヤーオブジェクトを渡す
         self.battle_view = BattleView() # 修正: 重複していた行を削除
-        self.conversation_scene = ConversationScene()
-        self.conversation_view = ConversationView(self.screen)
-        self.conversation_controller = ConversationController()
         self.running = True
 
     def run(self):
@@ -42,18 +36,23 @@ class GameController:
                 if event.type == pygame.QUIT: 
                     self.running = False
                 if self.game_state == "battle":
-                    self.battle_scene.process_input(event)
-                elif self.game_state == "conversation":
-                    self.conversation_controller.handle_input(events, self.conversation_scene)
+                    # 現在のシーンがBattleScene自身ではない場合（ConversationSceneの場合）は、
+                    # BattleSceneのcurrent_sceneにイベントを渡す
+                    if self.battle_scene.current_scene != self.battle_scene:
+                        self.battle_scene.current_scene.process_input(event)
+                    else:
+                        self.battle_scene.process_input(event)
 
             if self.game_state == "map":
                 interaction_target = self.map_controller.handle_input(events, self.map_scene)
                 self.map_scene.update()
 
-                if interaction_target:
-                    self.game_state = "conversation"
-                    self.conversation_scene.start_conversation(interaction_target.conversation_id)
-                    continue
+                # interaction_target は現時点ではNPCの会話を想定しているが、
+                # 今回はバトル中の会話に焦点を当てているため、この部分はコメントアウトまたは削除
+                # if interaction_target:
+                #     self.game_state = "conversation"
+                #     self.conversation_scene.start_conversation(interaction_target.conversation_id)
+                #     continue
 
                 self.map_view.draw(self.map_scene)
 
@@ -79,11 +78,6 @@ class GameController:
                         
                         self.game_state = "map" # マップに戻る
                         self.battle_scene.game_over = False # ゲームオーバー状態をリセット
-            
-            elif self.game_state == "conversation":
-                self.conversation_view.draw(self.conversation_scene, self.map_view, self.map_scene)
-                if self.conversation_scene.is_finished:
-                    self.game_state = "map"
 
         
         pygame.quit()

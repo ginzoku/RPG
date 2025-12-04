@@ -242,40 +242,57 @@ class CharacterStatusDrawer:
         text_color = settings.WHITE # デフォルトの色
         icon = "?" # デフォルト
 
-        # 最初の効果に基づいてインテントを決定する
-        effects = action_data.get("effects", [])
-        if not effects:
-            text_color = settings.LIGHT_GRAY
-            icon = "?"
-        else:
-            first_effect = effects[0]
-            effect_type = first_effect.get("type")
+        # インテントタイプに基づいてアイコンとテキストを決定する
+        intent_type = action_data.get("intent_type") # ここでintent_typeを取得
 
-            if effect_type == "damage":
-                power = first_effect.get("power", 0)
-                hits = first_effect.get("hits", 1)
-                damage = power + monster.attack_power
-                intent_text = f"{damage}x{hits}" if hits > 1 else str(damage)
-                text_color = settings.RED
-                icon = "⚔"
+        if intent_type == "attack":
+            first_effect = action_data.get("effects", [{}])[0]
+            power = first_effect.get("power", 0)
+            hits = first_effect.get("hits", 1)
+            damage = power + monster.attack_power
+            intent_text = f"{damage}x{hits}" if hits > 1 else str(damage)
+            text_color = settings.RED
+            icon = "⚔"
+            if first_effect.get("target_scope") == "all":
+                icon = "⚔" # 全体攻撃用アイコン
 
-                # 全体攻撃の場合アイコンを変更
-                if first_effect.get("target_scope") == "all":
-                    icon = "⚔" # ここは後で全体攻撃用アイコンに変えても良い
+            # 2つ目以降の効果にデバフがあればアイコンを変更
+            if any(e.get("type") == "apply_status" and STATUS_EFFECTS.get(e.get("status_id"), {}).get("is_debuff") for e in action_data.get("effects", [])[1:]):
+                icon = "⚔↓"
 
-                # 2つ目以降の効果にデバフがあればアイコンを変更
-                if any(e.get("type") == "apply_status" and STATUS_EFFECTS.get(e.get("status_id"), {}).get("is_debuff") for e in effects[1:]):
-                    icon = "⚔↓" # 例: 攻撃+デバフ
+        elif intent_type == "attack_debuff":
+            first_effect = action_data.get("effects", [{}])[0]
+            power = first_effect.get("power", 0)
+            hits = first_effect.get("hits", 1)
+            damage = power + monster.attack_power
+            intent_text = f"{damage}x{hits}" if hits > 1 else str(damage)
+            text_color = settings.RED
+            icon = "⚔↓"
 
+        elif intent_type == "sanity_attack":
+            first_effect = action_data.get("effects", [{}])[0]
+            intent_text = str(first_effect.get("power", 0))
+            text_color = settings.YELLOW
+            icon = "🌀" # 正気度攻撃用のアイコン
 
-            elif effect_type == "sanity_damage":
-                intent_text = str(first_effect.get("power", 0))
-                text_color = settings.YELLOW
-                icon = "⚔"
-            elif effect_type == "apply_status" and STATUS_EFFECTS.get(first_effect.get("status_id"), {}).get("is_debuff"):
-                icon = "↓"
+        elif intent_type == "debuff":
+            icon = "↓" # デバフ全般のアイコン
+            # 具体的なデバフをintent_textに表示することも可能
 
-        full_text = f"{icon} {intent_text}"
+        elif intent_type == "defense":
+            icon = "🛡" # 防御アイコン
+            # 防御量をintent_textに表示することも可能
+
+        elif intent_type == "conversation": # ここを追加
+            icon = "💬" # 会話イベント用のアイコン
+            intent_text = "" # 会話の場合はテキスト不要、または「会話」と表示しても良い
+            text_color = settings.BLUE # 会話用の色
+
+        elif intent_type == "unknown" or intent_type == "wait": # waitもunknownにまとめる
+            icon = "..." # 何もしない、または不明な行動
+
+        # インテントの描画
+        full_text = f"{icon} {intent_text}".strip()
         text_surface = self.fonts["medium"].render(full_text, True, text_color)
         text_rect = text_surface.get_rect(centerx=monster.x + 40, bottom=monster.y - 10)
         screen.blit(text_surface, text_rect)

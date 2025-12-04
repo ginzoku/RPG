@@ -34,5 +34,8 @@ ENEMY_GROUPS = {
     ],
     "shadow_eye_solo": [
         {"id": "shadow_eye", "pos_index": 0},
+    ],
+    "conversation_test_group": [
+        {"id": "mysterious_being", "pos_index": 0},
     ]
 }

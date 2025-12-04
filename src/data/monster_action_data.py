@@ -72,5 +72,13 @@ MONSTER_ACTIONS = {
         "effects": [
             {"type": "damage", "target_scope": "all", "power": 8, "hits": 1}
         ]
+    },
+    "trigger_conversation": {
+        "name": "奇妙なうめき声",
+        "intent_type": "conversation",
+        "message": "{monster_name}は奇妙なうめき声をあげている...",
+        "effects": [
+            {"type": "conversation_event", "conversation_id": "monster_battle_intro_conversation"}
+        ]
     }
 }

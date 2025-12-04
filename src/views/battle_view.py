@@ -44,6 +44,12 @@ class BattleView:
         }
 
     def draw(self, battle_state: BattleScene):
+        # シーンがBattleScene自身でない場合（例: 会話シーンの場合）は、そのシーンのdrawを呼び出す
+        if battle_state.current_scene != battle_state:
+            battle_state.current_scene.draw(self.screen)
+            pygame.display.flip()
+            return
+
         self.screen.fill(settings.BLACK)
         
         # ダメージアニメーションの生成

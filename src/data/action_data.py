@@ -131,5 +131,13 @@ ACTIONS = {
             {"type": "stat_change", "target_scope": "self", "stat": "max_mana", "value": 1},
             {"type": "apply_permanent_effect", "target_scope": "self", "effect_id": "blood_pact"}
         ]
+    },
+    "trigger_conversation": {
+        "name": "会話イベント発生",
+        "cost": 0,
+        "description": "会話イベントを発生させる。",
+        "effects": [
+            {"type": "conversation_event", "conversation_id": "monster_battle_intro_conversation"}
+        ]
     }
 }

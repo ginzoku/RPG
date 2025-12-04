@@ -19,6 +19,8 @@ class MapScene:
             EnemySymbol(200, 200, "goblin_duo"),
             EnemySymbol(400, 300, "spider_duo"),
             EnemySymbol(720, 400, "shadow_eye_solo"),
+            EnemySymbol(400, 400, "conversation_test_group")
+            
         ]
         # NPCをリストで管理
         self.npcs = [
