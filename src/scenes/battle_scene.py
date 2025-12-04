@@ -175,7 +175,7 @@ class BattleScene:
                     
                     # すべての敵の行動が終わり、会話イベントも発生しなかった場合
                     # プレイヤーの防御値をリセット
-                    self.onEnemyTurnEnd(self)
+                    self.onEnemyTurnEnd()
 
         else: # 会話シーンがアクティブな場合
             self.current_scene.update_state()
@@ -208,7 +208,7 @@ class BattleScene:
         
         # 会話が終了したので敵のターン状態を進める
         # これがないと会話の後に敵のターンが再度開始されてしまう
-        self.onEnemyTurnEnd(self)
+        self.onEnemyTurnEnd()
         
     def onEnemyTurnEnd(self):
         """敵のターン終了時に呼び出されるコールバック"""
