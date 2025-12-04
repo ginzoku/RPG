@@ -23,7 +23,7 @@ class BattleScene:
 
     def reset(self, enemy_group_id: str):
         # 敵の初期化
-        self.enemy_manager = EnemyManager(self.player)
+        self.enemy_manager = EnemyManager(self.player, self)
         self.enemy_manager.setup_enemies(enemy_group_id)
         self.input_handler = InputHandler(self)
         
@@ -160,9 +160,12 @@ class BattleScene:
                 self.deck_manager.draw_cards(5)
                 self.player.fully_recover_mana()
 
+    def start_conversation(self, conversation_id: str):
+        self.current_scene = ConversationScene(self.player, conversation_id, self.return_from_conversation)
+
     def return_from_conversation(self, result: dict | None = None):
         """会話シーンから戻ってきた際に呼び出されるコールバック"""
-        # self.current_scene = self # バトルシーンに制御を戻す
+        self.current_scene = self # バトルシーンに制御を戻す
         # # result には会話シーンでの選択結果などが含まれる可能性がある
         # # ここで会話の結果に基づいてバトルシーンに影響を与える処理を行う
         # if result and "effects" in result:

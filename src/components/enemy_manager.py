@@ -2,6 +2,7 @@
 import pygame
 import math
 import random
+from typing import TYPE_CHECKING
 
 from .character import Character # 修正: Characterクラスを相対インポート
 from .monster import Monster # 既存の行
@@ -10,9 +11,13 @@ from ..data.monster_data import MONSTERS
 from ..data.monster_action_data import MONSTER_ACTIONS
 from ..data.enemy_group_data import ENEMY_GROUPS, ENEMY_POSITIONS
 
+if TYPE_CHECKING:
+    from ..scenes.battle_scene import BattleScene
+
 class EnemyManager:
-    def __init__(self, player: "Character"):
+    def __init__(self, player: "Character", battle_scene: "BattleScene"):
         self.player = player
+        self.battle_scene = battle_scene
         self.enemies: list[Monster] = []
         self.turn_state: str = "start" # "start", "acting", "finished"
         self.acting_enemy_index: int = 0
@@ -66,21 +71,21 @@ class EnemyManager:
             if not enemy.is_animating:
                 # 行動の実行とアニメーション開始
                 action_id = enemy.next_action or enemy.choose_action()
-                
+                intent_type = MONSTER_ACTIONS.get(action_id, {}).get("intent_type", "wait")
                 action_data = MONSTER_ACTIONS.get(action_id, {})
                 
                 for effect in action_data.get("effects", []):
                     if effect.get("type") == "conversation_event":
                         conversation_id = effect["conversation_id"]
-                        # self.current_scene = ConversationScene(self.player, conversation_id, self.return_from_conversation)
+                        self.battle_scene.start_conversation(conversation_id)
+                        # self.acting_enemy_index += 1
+                        # return log_messages
                     else:
-                        intent_type = MONSTER_ACTIONS.get(action_id, {}).get("intent_type", "unknown")
                         ActionHandler.execute_monster_action(enemy, enemy.targets, action_id)
 
                 enemy.animation_type = "shake"
                 if intent_type in ["attack", "attack_debuff"]:
                     enemy.animation_type = "attack"
-                
                 enemy.is_animating = True
                 enemy.animation_start_time = pygame.time.get_ticks()
             else:
