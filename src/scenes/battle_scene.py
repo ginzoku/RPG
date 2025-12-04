@@ -134,81 +134,55 @@ class BattleScene:
             self.current_scene.process_input(event)
 
     def update_state(self):
-        """ゲームの状態を更新する"""
-        if self.current_scene == self: # バトルシーンがアクティブな場合
-            # 既存のバトルシーンのupdate_stateロジック
-            if self.turn == "enemy" and not self.game_over:
-                self.enemy_manager.update_turn()
-                self._check_game_over()
+        if self.turn == "enemy" and not self.game_over:
+            self.enemy_manager.update_turn()
+            self._check_game_over()
 
-                if self.enemy_manager.turn_state == "finished":
-                    # 各敵の行動実行フェーズ
-                    for enemy in self.enemy_manager.enemies:
-                        if not enemy.is_alive: # 倒れている敵は行動しない
-                            continue
-
-                        action_id = enemy.decide_next_action() # 次の行動を決定 (next_actionに格納される)
-                        action_data = MONSTER_ACTIONS.get(action_id, {})
-
-                        # 会話イベントの検出
-                        is_conversation_action = False
-                        for effect in action_data.get("effects", []):
-                            if effect.get("type") == "conversation_event":
-                                conversation_id = effect["conversation_id"]
-                                self.current_scene = ConversationScene(self.player, conversation_id, self.return_from_conversation)
-                                is_conversation_action = True
-                                break
-                        
-                        if is_conversation_action:
-                            # 会話イベントが発生したら、それ以上の敵の行動は処理せず、会話シーンに遷移する
-                            # プレイヤーの防御値リセットやターン終了処理はreturn_from_conversationで行われる
-                            return 
-
-                        # 会話イベントでなければ通常行動を実行
-                        # targetsはActionHandlerで決定されるため、ここでenemy.targetsを設定する必要はない
-                        ActionHandler.execute_monster_action(enemy, [self.player], action_id) # 常にプレイヤーをターゲットとする
-                        
-                        # 行動後の状態異常のデクリメントなどはActionHandler内で処理されるべきだが、
-                        # 現在はここに書かれているので残す。ただし、会話イベントの場合は既にreturnしている
-                        if not self.game_over:
-                            enemy.decrement_status_effects()
-                    
-                    # すべての敵の行動が終わり、会話イベントも発生しなかった場合
-                    # プレイヤーの防御値をリセット
-                    self.onEnemyTurnEnd()
-
-        else: # 会話シーンがアクティブな場合
-            self.current_scene.update_state()
-            # 会話シーンが終了したかチェック
-            if self.current_scene.is_finished:
-                # 会話シーンからバトルシーンに戻る
-                self.current_scene = self
-                # 会話の結果に基づいてバトルシーンの状態を更新する必要がある場合はここで行う
-                # 現時点では何もしないが、将来的にconversation_scene.resultなどを利用する可能性
+            if self.enemy_manager.turn_state == "finished":
+                # 敵のターン終了処理
+                for enemy in self.enemy_manager.enemies:
+                    # 敵の行動決定とターゲット設定
+                    action_id = enemy.decide_next_action()
+                    action_data = MONSTER_ACTIONS.get(action_id, {})
+                    first_effect = action_data.get("effects", [{}])[0]
+                    target_scope = first_effect.get("target_scope")
+                    if target_scope == "all":
+                        enemy.targets = [self.player] # 将来的に味方が増える場合はリストにする
+                    else: # single, self
+                        enemy.targets = [self.player]
+                    if not self.game_over:
+                        enemy.decrement_status_effects()
+                
+                # プレイヤーの防御値をリセット
+                self.player.defense_buff = 0
+                
+                self.turn = "player"
+                self.deck_manager.draw_cards(5)
+                self.player.fully_recover_mana()
 
     def return_from_conversation(self, result: dict | None = None):
         """会話シーンから戻ってきた際に呼び出されるコールバック"""
-        self.current_scene = self # バトルシーンに制御を戻す
-        # result には会話シーンでの選択結果などが含まれる可能性がある
-        # ここで会話の結果に基づいてバトルシーンに影響を与える処理を行う
-        if result and "effects" in result:
-            # 会話の選択結果に応じたエフェクトを適用
-            # ActionHandler を利用してエフェクトを適用する
-            # ただし、ActionHandler は player action を想定しているので、
-            # monster action の effect を適用できるように修正が必要かもしれない
-            print(f"Applying conversation effects: {result['effects']}")
-            for effect in result["effects"]:
-                targets = [self.player] # 常にプレイヤーが対象
+        # self.current_scene = self # バトルシーンに制御を戻す
+        # # result には会話シーンでの選択結果などが含まれる可能性がある
+        # # ここで会話の結果に基づいてバトルシーンに影響を与える処理を行う
+        # if result and "effects" in result:
+        #     # 会話の選択結果に応じたエフェクトを適用
+        #     # ActionHandler を利用してエフェクトを適用する
+        #     # ただし、ActionHandler は player action を想定しているので、
+        #     # monster action の effect を適用できるように修正が必要かもしれない
+        #     print(f"Applying conversation effects: {result['effects']}")
+        #     for effect in result["effects"]:
+        #         targets = [self.player] # 常にプレイヤーが対象
 
-                # ActionHandler._process_effect を呼び出して効果を適用
-                # 会話の結果のエフェクトには特定のsource（攻撃元）がないため、
-                # ここでは便宜的にプレイヤー自身をsourceとして渡す（後で調整の余地あり）
-                ActionHandler._process_effect(self.player, targets, effect)
-            self._check_game_over() # 会話イベントの結果でゲームオーバーになる可能性があるのでチェック
+        #         # ActionHandler._process_effect を呼び出して効果を適用
+        #         # 会話の結果のエフェクトには特定のsource（攻撃元）がないため、
+        #         # ここでは便宜的にプレイヤー自身をsourceとして渡す（後で調整の余地あり）
+        #         ActionHandler._process_effect(self.player, targets, effect)
+        #     self._check_game_over() # 会話イベントの結果でゲームオーバーになる可能性があるのでチェック
         
-        # 会話が終了したので敵のターン状態を進める
-        # これがないと会話の後に敵のターンが再度開始されてしまう
-        self.onEnemyTurnEnd()
+        # # 会話が終了したので敵のターン状態を進める
+        # # これがないと会話の後に敵のターンが再度開始されてしまう
+        # self.onEnemyTurnEnd()
         
     def onEnemyTurnEnd(self):
         """敵のターン終了時に呼び出されるコールバック"""

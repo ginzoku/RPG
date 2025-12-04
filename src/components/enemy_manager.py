@@ -2,6 +2,7 @@
 import pygame
 import math
 import random
+
 from .character import Character # 修正: Characterクラスを相対インポート
 from .monster import Monster # 既存の行
 from .action_handler import ActionHandler
@@ -65,9 +66,16 @@ class EnemyManager:
             if not enemy.is_animating:
                 # 行動の実行とアニメーション開始
                 action_id = enemy.next_action or enemy.choose_action()
-                intent_type = MONSTER_ACTIONS.get(action_id, {}).get("intent_type", "unknown")
-
-                log_messages.extend(ActionHandler.execute_monster_action(enemy, enemy.targets, action_id))
+                
+                action_data = MONSTER_ACTIONS.get(action_id, {})
+                
+                for effect in action_data.get("effects", []):
+                    if effect.get("type") == "conversation_event":
+                        conversation_id = effect["conversation_id"]
+                        # self.current_scene = ConversationScene(self.player, conversation_id, self.return_from_conversation)
+                    else:
+                        intent_type = MONSTER_ACTIONS.get(action_id, {}).get("intent_type", "unknown")
+                        ActionHandler.execute_monster_action(enemy, enemy.targets, action_id)
 
                 enemy.animation_type = "shake"
                 if intent_type in ["attack", "attack_debuff"]:
