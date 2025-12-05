@@ -134,6 +134,11 @@ class BattleScene:
             self.current_scene.process_input(event)
 
     def update_state(self):
+        # サブシーン（会話など）がアクティブな場合は、そちらのupdateを呼ぶ
+        if self.current_scene != self:
+            self.current_scene.update_state()
+            return
+
         if self.turn == "enemy" and not self.game_over:
             self.enemy_manager.update_turn()
             self._check_game_over()
@@ -166,6 +171,7 @@ class BattleScene:
     def return_from_conversation(self, result: dict | None = None):
         """会話シーンから戻ってきた際に呼び出されるコールバック"""
         self.current_scene = self # バトルシーンに制御を戻す
+        self.enemy_manager.advance_to_next_enemy() # 会話が終わったので、次の敵の行動に進める
         # # result には会話シーンでの選択結果などが含まれる可能性がある
         # # ここで会話の結果に基づいてバトルシーンに影響を与える処理を行う
         # if result and "effects" in result:

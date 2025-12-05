@@ -37,5 +37,6 @@ ENEMY_GROUPS = {
     ],
     "conversation_test_group": [
         {"id": "mysterious_being", "pos_index": 0},
+        {"id": "mysterious_being", "pos_index": 1},
     ]
 }

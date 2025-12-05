@@ -36,12 +36,7 @@ class GameController:
                 if event.type == pygame.QUIT: 
                     self.running = False
                 if self.game_state == "battle":
-                    # 現在のシーンがBattleScene自身ではない場合（ConversationSceneの場合）は、
-                    # BattleSceneのcurrent_sceneにイベントを渡す
-                    if self.battle_scene.current_scene != self.battle_scene:
-                        self.battle_scene.current_scene.process_input(event)
-                    else:
-                        self.battle_scene.process_input(event)
+                    self.battle_scene.process_input(event)
 
             if self.game_state == "map":
                 interaction_target = self.map_controller.handle_input(events, self.map_scene)

@@ -71,23 +71,26 @@ class EnemyManager:
             if not enemy.is_animating:
                 # 行動の実行とアニメーション開始
                 action_id = enemy.next_action or enemy.choose_action()
-                intent_type = MONSTER_ACTIONS.get(action_id, {}).get("intent_type", "wait")
                 action_data = MONSTER_ACTIONS.get(action_id, {})
-                
-                for effect in action_data.get("effects", []):
-                    if effect.get("type") == "conversation_event":
-                        conversation_id = effect["conversation_id"]
-                        self.battle_scene.start_conversation(conversation_id)
-                        # self.acting_enemy_index += 1
-                        # return log_messages
-                    else:
-                        ActionHandler.execute_monster_action(enemy, enemy.targets, action_id)
+                effects = action_data.get("effects", [])
 
-                enemy.animation_type = "shake"
-                if intent_type in ["attack", "attack_debuff"]:
-                    enemy.animation_type = "attack"
-                enemy.is_animating = True
-                enemy.animation_start_time = pygame.time.get_ticks()
+                is_conversation = effects and effects[0].get("type") == "conversation_event"
+
+                if is_conversation:
+                    conversation_id = effects[0]["conversation_id"]
+                    self.battle_scene.start_conversation(conversation_id)
+                    return log_messages
+                else:
+                    # 通常のアクションを実行してアニメーションを設定
+                    ActionHandler.execute_monster_action(enemy, enemy.targets, action_id)
+                    
+                    intent_type = action_data.get("intent_type", "unknown")
+                    enemy.animation_type = "shake"
+                    if intent_type in ["attack", "attack_debuff"]:
+                        enemy.animation_type = "attack"
+                    
+                    enemy.is_animating = True
+                    enemy.animation_start_time = pygame.time.get_ticks()
             else:
                 # アニメーション更新
                 elapsed_time = pygame.time.get_ticks() - enemy.animation_start_time
@@ -110,3 +113,7 @@ class EnemyManager:
                     self.acting_enemy_index += 1
         
         return log_messages
+
+    def advance_to_next_enemy(self):
+        """現在行動中の敵のターンを終了し、次の敵に進める"""
+        self.acting_enemy_index += 1
