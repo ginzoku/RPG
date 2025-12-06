@@ -44,15 +44,12 @@ class BattleView:
         }
 
     def draw(self, battle_state: BattleScene):
-        # シーンがBattleScene自身でない場合（例: 会話シーンの場合）は、そのシーンのdrawを呼び出す
-        if battle_state.current_scene != battle_state:
-            battle_state.current_scene.draw(self.screen)
-            pygame.display.flip()
-            return
-
-        self.screen.fill(settings.BLACK)
+        # 1. 常に戦闘シーンの基本要素（背景、キャラクターなど）を描画
+        if battle_state.background_image:
+            self.screen.blit(battle_state.background_image, (0, 0))
+        else:
+            self.screen.fill(settings.BLACK)
         
-        # ダメージアニメーションの生成
         self._check_for_damage(battle_state.player)
         for enemy in battle_state.enemy_manager.enemies:
             self._check_for_damage(enemy)
@@ -65,11 +62,19 @@ class BattleView:
                 self.status_drawer.draw(self.screen, enemy, settings.RED, is_selected, mouse_pos)
         
         self.relic_drawer.draw(self.screen, battle_state)
-        self._draw_ui(battle_state)
+
+        # 2. アクティブなシーンに応じて、会話か戦闘UIかを描画
+        if battle_state.current_scene != battle_state:
+            # 会話シーンがアクティブな場合
+            battle_state.current_scene.draw(self.screen)
+        else:
+            # 戦闘シーンがアクティブな場合
+            self._draw_ui(battle_state)
         
-        # ダメージアニメーションの更新と描画
+        # 3. ダメージアニメーションを常に最前面に描画
         self._update_and_draw_animations()
 
+        # 4. 画面を更新
         pygame.display.flip()
 
     def _check_for_damage(self, character: Character):

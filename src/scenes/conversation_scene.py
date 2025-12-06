@@ -27,7 +27,13 @@ class ConversationScene:
     def _show_current_event(self):
         event = self.conversation_data["events"][self.current_event_index]
         self.view.set_dialogue(event.get("speaker"), event["text"])
-        
+
+        # eventに'background'キーがあればそれを使い、なければdefault_backgroundを試す
+        if 'background' in event:
+            self.view.set_background(event['background'])
+        else:
+            self.view.set_background(self.conversation_data.get('default_background'))
+
         # 選択肢がある場合
         if "choices" in event:
             self.current_choices = event["choices"]
@@ -36,12 +42,6 @@ class ConversationScene:
         else:
             self.current_choices = []
             self.view.clear_choices()
-
-        # イベント個別の背景が指定されていれば設定
-        if "background" in event:
-            self.view.set_background(event["background"])
-        elif self.conversation_data["default_background"]:
-            self.view.set_background(self.conversation_data["default_background"])
 
 
     def process_input(self, event: pygame.event.Event):

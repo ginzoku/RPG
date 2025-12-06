@@ -11,32 +11,53 @@ ENEMY_POSITIONS = {
 }
 
 ENEMY_GROUPS = {
-    "two_slimes": [
-        {"id": "slime", "pos_index": 0},
-        {"id": "slime", "pos_index": 1},
-    ],
-    "goblin_and_slime": [
-        {"id": "goblin", "pos_index": 0},
-        {"id": "slime", "pos_index": 1},
-    ],
-    "goblin_duo": [
-        {"id": "goblin", "pos_index": 0},
-        {"id": "goblin", "pos_index": 1},
-    ],
-    "spider_duo": [
-        {"id": "venom_spider", "pos_index": 0},
-        {"id": "venom_spider", "pos_index": 1},
-    ],
-    "slime_trio": [
-        {"id": "slime", "pos_index": 0},
-        {"id": "slime", "pos_index": 1},
-        {"id": "slime", "pos_index": 2},
-    ],
-    "shadow_eye_solo": [
-        {"id": "shadow_eye", "pos_index": 0},
-    ],
-    "conversation_test_group": [
-        {"id": "mysterious_being", "pos_index": 0},
-        {"id": "mysterious_being", "pos_index": 1},
-    ]
+    "two_slimes": {
+        "enemies": [
+            {"id": "slime", "pos_index": 0},
+            {"id": "slime", "pos_index": 1},
+        ],
+        "background": "assets/backgrounds/forest_battle.png"
+    },
+    "goblin_and_slime": {
+        "enemies": [
+            {"id": "goblin", "pos_index": 0},
+            {"id": "slime", "pos_index": 1},
+        ],
+        "background": "assets/backgrounds/forest_battle.png"
+    },
+    "goblin_duo": {
+        "enemies": [
+            {"id": "goblin", "pos_index": 0},
+            {"id": "goblin", "pos_index": 1},
+        ],
+        "background": "assets/backgrounds/forest_battle.png"
+    },
+    "spider_duo": {
+        "enemies": [
+            {"id": "venom_spider", "pos_index": 0},
+            {"id": "venom_spider", "pos_index": 1},
+        ],
+        "background": "assets/backgrounds/forest_battle.png"
+    },
+    "slime_trio": {
+        "enemies": [
+            {"id": "slime", "pos_index": 0},
+            {"id": "slime", "pos_index": 1},
+            {"id": "slime", "pos_index": 2},
+        ],
+        "background": "assets/backgrounds/forest_battle.png"
+    },
+    "shadow_eye_solo": {
+        "enemies": [
+            {"id": "shadow_eye", "pos_index": 0},
+        ],
+        "background": "assets/backgrounds/forest_battle.png"
+    },
+    "conversation_test_group": {
+        "enemies": [
+            {"id": "mysterious_being", "pos_index": 0},
+            {"id": "mysterious_being", "pos_index": 1},
+        ],
+        "background": "assets/backgrounds/forest_battle.png"
+    }
 }

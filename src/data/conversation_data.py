@@ -5,7 +5,10 @@ CONVERSATIONS = {
         "default_background": "assets/backgrounds/forest_battle.png", # 会話イベント全体のデフォルト背景
         "events": [ # 会話の進行を示すイベントのリスト
             {"speaker": "モンスター", "text": "よくぞここまで来たな、勇者よ！"},
-            {"speaker": "モンスター", "text": "だが、ここから先には一歩も行かせん！"},
+            {
+                "speaker": "モンスター", "text": "だが、ここから先には一歩も行かせん！",
+                "background": "assets/backgrounds/dark_forest.png"
+            }, # テキストごとに背景を変更
             {
                 "speaker": "モンスター",
                 "text": "さて、どうする？",
@@ -28,7 +31,7 @@ CONVERSATIONS = {
             },
             {"speaker": "モンスター", "text": "ほう、攻撃してきたか！貴様の命運もここまで！", "event_index": 3}, # "next_event_index"で指定されたジャンプ先
             {"speaker": "モンスター", "text": "様子を見るとは賢明だな。だが、いずれにせよ無駄だ！", "event_index": 4},
-            {"speaker": "モンスター", "text": "さあ、決着をつけよう！"},
+            {"speaker": "モンスター", "text": "さあ、決着をつけよう！", "background": None}, # 背景を非表示にする
         ]
     },
     "npc_1_intro": {

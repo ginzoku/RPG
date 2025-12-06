@@ -44,7 +44,11 @@ class ConversationView:
     def set_selected_choice(self, index: int):
         self.selected_choice_index = index
 
-    def set_background(self, image_path: str):
+    def set_background(self, image_path: str | None):
+        if image_path is None:
+            self.background_image = None
+            return
+
         try:
             full_path = image_path # 仮定: image_pathはすでにフルパスか、または適切に解決されるパス
             self.background_image = pygame.image.load(full_path).convert()
@@ -57,8 +61,6 @@ class ConversationView:
         # 背景の描画
         if self.background_image:
             screen.blit(self.background_image, (0, 0))
-        else:
-            screen.fill((0, 0, 0)) # 背景画像がない場合は黒で塗りつぶし
 
         # ダイアログボックスの描画
         pygame.draw.rect(screen, (0, 0, 0, 180), self.dialogue_box_rect, border_radius=10) # 半透明の黒

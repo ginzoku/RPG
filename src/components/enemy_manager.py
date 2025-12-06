@@ -28,10 +28,12 @@ class EnemyManager:
         self.enemies.clear()
         if group_id is None:
             group_id = random.choice(list(ENEMY_GROUPS.keys()))
-        enemy_group = ENEMY_GROUPS[group_id]
-        positions = ENEMY_POSITIONS[len(enemy_group)]
+        
+        enemy_group_data = ENEMY_GROUPS[group_id]
+        enemy_list = enemy_group_data["enemies"]
+        positions = ENEMY_POSITIONS[len(enemy_list)]
 
-        for enemy_info in enemy_group:
+        for enemy_info in enemy_list:
             monster_data = MONSTERS[enemy_info["id"]]
             pos = positions[enemy_info["pos_index"]]
             enemy = Monster(name=monster_data["name"], max_hp=monster_data["max_hp"], attack_power=monster_data["attack_power"],

@@ -18,10 +18,24 @@ from ..config import settings
 class BattleScene:
     def __init__(self, player: Character):
         self.player = player
+        self.background_image = None
         self.current_scene = self # BattleScene自身を初期シーンとして設定
         self.reset("conversation_test_group") # デフォルトの敵グループで初期化
 
     def reset(self, enemy_group_id: str):
+        # 背景の読み込み
+        enemy_group_data = ENEMY_GROUPS.get(enemy_group_id, {})
+        background_path = enemy_group_data.get("background")
+        if background_path:
+            try:
+                self.background_image = pygame.image.load(background_path).convert()
+                self.background_image = pygame.transform.scale(self.background_image, (settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT))
+            except (pygame.error, FileNotFoundError) as e:
+                print(f"Error loading battle background image {background_path}: {e}")
+                self.background_image = None
+        else:
+            self.background_image = None
+
         # 敵の初期化
         self.enemy_manager = EnemyManager(self.player, self)
         self.enemy_manager.setup_enemies(enemy_group_id)
