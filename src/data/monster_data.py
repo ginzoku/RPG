@@ -41,7 +41,7 @@ MONSTERS = {
         "name": "謎の存在",
         "max_hp": 100,
         "attack_power": 0, # 会話だけでなく、一応攻撃もできるようにしておく
-        "actions": ["trigger_conversation", "trigger_conversation", "normal_attack"], # 会話アクションを優先的に出すため複数回指定
+        "actions": ["trigger_conversation", "self_heal", "normal_attack"], # 会話アクションを優先的に出すため複数回指定
         "gold": 50
     }
 }

@@ -33,6 +33,15 @@ ACTIONS = {
             {"type": "gain_defense", "target_scope": "self", "power": 10}
         ]
     },
+    "heal_light": {
+        "name": "小ヒール",
+        "cost": 1,
+        "target_scope": "self",
+        "description": "HPを8回復する。",
+        "effects": [
+            {"type": "heal", "power": 8}
+        ]
+    },
     "pass": {
         "name": "パス",
         "cost": 0,

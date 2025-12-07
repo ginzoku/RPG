@@ -57,6 +57,10 @@ class ActionHandler:
             modified_damage = StatusEffectProcessor.modify_outgoing_damage(source, base_damage)
             final_damage = max(1, modified_damage)
             target_character.take_damage(final_damage)
+
+        elif effect_type == "heal":
+            power = effect.get("power", 0)
+            target_character.heal(power)
         
         elif effect_type == "gain_defense":
             gained_defense = effect.get("power", 0) + source.defense_power

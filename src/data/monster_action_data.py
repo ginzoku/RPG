@@ -49,6 +49,14 @@ MONSTER_ACTIONS = {
         "message": "{monster_name}は様子を見ている...",
         "effects": [{"type": "pass"}]
     },
+    "self_heal": {
+        "name": "自己再生",
+        "intent_type": "buff",
+        "message": "{monster_name}は傷を再生した！",
+        "effects": [
+            {"type": "heal", "target_scope": "self", "power": 10}
+        ]
+    },
     "mind_crush": {
         "name": "精神攻撃",
         "intent_type": "sanity_attack", # 正気度攻撃用のインテントタイプ
