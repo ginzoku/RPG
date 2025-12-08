@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import pygame
 import time
+from ...config import settings # Added import
 
 class DamageIndicator:
     """ダメージ数値のアニメーション表示を管理するクラス"""
@@ -11,9 +12,9 @@ class DamageIndicator:
         self.color = color
         self.font = font
         self.start_time = time.time()
-        self.duration = 0.5  # アニメーション時間（秒）
+        self.duration = settings.ANIMATION_SETTINGS["damage_indicator"]["duration"]
         self.is_alive = True
-        self.jump_height = 40 # 跳ねる高さ
+        self.jump_height = settings.ANIMATION_SETTINGS["damage_indicator"]["jump_height"]
 
     def update(self):
         """アニメーションの状態を更新する"""

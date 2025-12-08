@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from .character import Character # 修正: Characterクラスを相対インポート
 from .monster import Monster # 既存の行
+from ..config import settings # Added import
 from .action_handler import ActionHandler
 from ..data.monster_data import MONSTERS
 from ..data.monster_action_data import MONSTER_ACTIONS
@@ -21,7 +22,6 @@ class EnemyManager:
         self.enemies: list[Monster] = []
         self.turn_state: str = "start" # "start", "acting", "finished"
         self.acting_enemy_index: int = 0
-        self.animation_duration: int = 300 # 0.3秒
 
     def setup_enemies(self, group_id: str | None = None):
         """敵グループを生成し、初期化する"""
@@ -81,10 +81,12 @@ class EnemyManager:
 
                 # アニメーションタイプを決定
                 enemy.animation_type = "shake"  # デフォルトはシェイク
+                enemy.animation_duration = settings.ANIMATION_SETTINGS["enemy_shake"]["duration"] # Set default duration
                 if not is_conversation:
                     intent_type = action_data.get("intent_type", "unknown")
                     if intent_type in ["attack", "attack_debuff"]:
                         enemy.animation_type = "attack"
+                        enemy.animation_duration = settings.ANIMATION_SETTINGS["enemy_attack_slide"]["duration"] # Set specific duration
                 
                 # アニメーション開始
                 enemy.is_animating = True
@@ -99,17 +101,23 @@ class EnemyManager:
             else:
                 # アニメーション更新
                 elapsed_time = pygame.time.get_ticks() - enemy.animation_start_time
-                if elapsed_time < self.animation_duration:
+                if elapsed_time < enemy.animation_duration * 1000:
                     if enemy.animation_type == "attack":
-                        half_duration = self.animation_duration / 2
-                        progress = elapsed_time / half_duration if elapsed_time < half_duration else (elapsed_time - half_duration) / half_duration
-                        if elapsed_time < half_duration:
-                            enemy.x = enemy.original_x - 50 * progress
+                        duration_ms = enemy.animation_duration * 1000
+                        half_duration_ms = duration_ms / 2
+                        progress = elapsed_time / half_duration_ms if elapsed_time < half_duration_ms else (elapsed_time - half_duration_ms) / half_duration_ms
+                        
+                        slide_distance = settings.ANIMATION_SETTINGS["enemy_attack_slide"]["distance"]
+                        if elapsed_time < half_duration_ms:
+                            enemy.x = enemy.original_x - slide_distance * progress
                         else:
-                            enemy.x = (enemy.original_x - 50) + 50 * progress
+                            enemy.x = (enemy.original_x - slide_distance) + slide_distance * progress
                     elif enemy.animation_type == "shake":
-                        progress = elapsed_time / self.animation_duration
-                        shake_offset = math.sin(progress * math.pi * 4) * 10
+                        duration_ms = enemy.animation_duration * 1000
+                        progress = elapsed_time / duration_ms
+                        amplitude = settings.ANIMATION_SETTINGS["enemy_shake"]["amplitude"]
+                        frequency_factor = settings.ANIMATION_SETTINGS["enemy_shake"]["frequency_factor"]
+                        shake_offset = math.sin(progress * math.pi * frequency_factor) * amplitude
                         enemy.x = enemy.original_x + shake_offset
                 else:
                     # アニメーション終了処理

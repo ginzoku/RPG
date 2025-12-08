@@ -14,6 +14,7 @@ class Monster(Character):
         # アニメーション用属性
         self.is_animating: bool = False
         self.animation_start_time: int = 0
+        self.animation_duration: float = 0.0 # Added this line
         self.original_x: int = x
         self.animation_type: str | None = None # 'attack' or 'shake'
         self.pending_conversation_id: str | None = None # 会話イベントを一時保持

@@ -16,6 +16,24 @@ FONT_SIZES: dict[str, int] = {
     "bar": 12,
 }
 
+# アニメーション設定
+ANIMATION_SETTINGS: dict[str, dict] = {
+    "damage_indicator": {
+        "duration": 0.5,
+        "jump_height": 40,
+    },
+    "enemy_attack_slide": {
+        "duration": 0.2, # seconds
+        "distance": 50, # pixels
+    },
+    "enemy_shake": {
+        "duration": 0.2, # seconds
+        "amplitude": 10, # pixels
+        "frequency_factor": 4, # for math.sin(progress * math.pi * frequency_factor)
+    }
+}
+
+
 # 色定義
 BLACK: tuple[int, int, int] = (0, 0, 0)
 WHITE: tuple[int, int, int] = (255, 255, 255)
