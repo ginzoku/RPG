@@ -39,22 +39,15 @@ class CharacterStatusDrawer:
         # --- UI要素のY座標とX座標の基準 ---
         base_y = character.y + char_height + ui_gap
         base_x = character.x
+        current_y = base_y
 
-        # HPテキストとバー
-        hp_text = self.fonts["small"].render(f"HP: {character.current_hp}/{character.max_hp}", True, settings.WHITE)
-        screen.blit(hp_text, (base_x, base_y))
-        
-        current_y = base_y + hp_text.get_height() + ui_gap
+        # HPバー
         self._draw_hp_bar(screen, character, base_x, current_y, bar_width, bar_height)
         self._draw_defense_buff(screen, character, base_x, current_y, bar_width, bar_height)
         current_y += line_gap
 
         # プレイヤーの場合のみ正気度とマナを描画
         if character.max_mana > 0 and character.max_sanity is not None:
-            san_text = self.fonts["small"].render(f"SAN: {character.current_sanity}/{character.max_sanity}", True, settings.WHITE)
-            screen.blit(san_text, (base_x, current_y))
-            current_y += san_text.get_height() + ui_gap
-            
             self._draw_sanity_bar(screen, character, base_x, current_y, bar_width, bar_height)
             current_y += line_gap
 
@@ -206,12 +199,23 @@ class CharacterStatusDrawer:
         pygame.draw.rect(screen, bar_color, (x, y, hp_bar_width, height))
         pygame.draw.rect(screen, settings.WHITE, (x, y, width, height), 1)
 
+        # バーの中央に数値を描画
+        hp_text = self.fonts["bar"].render(f"{character.current_hp}/{character.max_hp}", True, settings.WHITE)
+        text_rect = hp_text.get_rect(center=(x + width / 2, y + height / 2))
+        screen.blit(hp_text, text_rect)
+
     def _draw_sanity_bar(self, screen: pygame.Surface, character: Character, x: int, y: int, width: int, height: int):
         pygame.draw.rect(screen, settings.DARK_GRAY, (x, y, width, height))
         sanity_percentage = character.get_sanity_percentage() if character.current_sanity is not None else 0
         sanity_bar_width = (width * sanity_percentage) / 100
         pygame.draw.rect(screen, settings.YELLOW, (x, y, sanity_bar_width, height))
         pygame.draw.rect(screen, settings.WHITE, (x, y, width, height), 1)
+
+        # バーの中央に数値を描画
+        if character.current_sanity is not None:
+            san_text = self.fonts["bar"].render(f"{character.current_sanity}/{character.max_sanity}", True, settings.WHITE)
+            text_rect = san_text.get_rect(center=(x + width / 2, y + height / 2))
+            screen.blit(san_text, text_rect)
 
     def _draw_defense_buff(self, screen: pygame.Surface, character: Character, x: int, y: int, bar_width: int, bar_height: int):
         if character.defense_buff > 0:

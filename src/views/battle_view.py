@@ -41,6 +41,7 @@ class BattleView:
             "small": self._get_japanese_font(24),
             "log": self._get_japanese_font(20),
             "card": self._get_japanese_font(18),
+            "bar": self._get_japanese_font(12),
         }
 
     def draw(self, battle_state: BattleScene):

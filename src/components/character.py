@@ -4,8 +4,9 @@ from ..data.relic_data import RELICS
 from .status_effect_processor import StatusEffectProcessor
 
 class Character:
-    def __init__(self, name: str, max_hp: int, max_mp: int, attack_power: int, x: int, y: int, max_sanity: int | None = None):
+    def __init__(self, name: str, max_hp: int, max_mp: int, attack_power: int, x: int, y: int, character_type: str, max_sanity: int | None = None):
         self.name: str = name
+        self.character_type: str = character_type
         self.max_hp: int = max_hp
         self.current_hp: int = max_hp
         self.max_mana: int = max_mp
@@ -22,12 +23,15 @@ class Character:
         self.defense_buff: int = 0 # 防御によるダメージ減少量
         self.status_effects: dict[str, int] = {} # key: status_id, value: turns
         self.permanent_effects: list[str] = [] # 消去不可の永続効果
-        self.relics: list[str] = ["red_stone"] # 初期レリック
+        self.relics: list[str] = [] # まず空で初期化
         self.is_targeted: bool = False # ターゲット選択時にハイライトするためのフラグ
         self.gold: int = 0 # 所持ゴールド
 
-        # レリックの効果を初期適用
-        self._apply_initial_relic_effects()
+        # プレイヤーの場合のみ初期レリックを適用
+        if self.character_type == 'player':
+            self.relics = ["red_stone"] # 初期レリック
+            # レリックの効果を初期適用
+            self._apply_initial_relic_effects()
 
     def _apply_initial_relic_effects(self):
         for relic_id in self.relics:
