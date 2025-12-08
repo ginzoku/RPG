@@ -36,12 +36,8 @@ class BattleView:
 
     def _load_fonts(self) -> dict:
         return {
-            "large": self._get_japanese_font(48),
-            "medium": self._get_japanese_font(36),
-            "small": self._get_japanese_font(24),
-            "log": self._get_japanese_font(20),
-            "card": self._get_japanese_font(18),
-            "bar": self._get_japanese_font(12),
+            name: self._get_japanese_font(size)
+            for name, size in settings.FONT_SIZES.items()
         }
 
     def draw(self, battle_state: BattleScene):

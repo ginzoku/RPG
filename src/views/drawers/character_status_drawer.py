@@ -38,7 +38,7 @@ class CharacterStatusDrawer:
             name_color = settings.YELLOW if is_selected_target else settings.WHITE
 
             # 名前をレンダリング
-            name_text = self.fonts["small"].render(character.name, True, name_color)
+            name_text = self.fonts["name"].render(character.name, True, name_color)
             name_rect = name_text.get_rect(centerx=character.x + char_width / 2, y=character.y + char_height + ui_gap)
             
             # 名前を描画
@@ -46,7 +46,7 @@ class CharacterStatusDrawer:
 
             # 選択されている場合、名前の左側にアイコンを描画
             if is_selected_target:
-                icon_text = self.fonts["small"].render("▶", True, name_color)
+                icon_text = self.fonts["name"].render("▶", True, name_color)
                 # name_rect.left は名前の左端のx座標
                 icon_rect = icon_text.get_rect(right=name_rect.left - 5, centery=name_rect.centery) # 5はアイコンと名前の間のギャップ
                 screen.blit(icon_text, icon_rect)

@@ -5,6 +5,17 @@ SCREEN_WIDTH: int = 1000
 SCREEN_HEIGHT: int = 600
 FPS: int = 60
 
+# フォントサイズ
+FONT_SIZES: dict[str, int] = {
+    "large": 48,
+    "medium": 36,
+    "small": 24,
+    "log": 20,
+    "card": 18,
+    "name":16,
+    "bar": 12,
+}
+
 # 色定義
 BLACK: tuple[int, int, int] = (0, 0, 0)
 WHITE: tuple[int, int, int] = (255, 255, 255)
