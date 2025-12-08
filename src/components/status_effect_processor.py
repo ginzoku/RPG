@@ -24,8 +24,8 @@ class StatusEffectProcessor:
                 if existing_status_data.get("removal_condition") == "on_debuff_received":
                     StatusEffectProcessor._remove_status(character, existing_status_id)
 
-        # 状態異常を付与（効果は上書きせず、大きい方を採用）
-        character.status_effects[status_id] = max(character.status_effects.get(status_id, 0), turns)
+        # 状態異常を付与（効果は加算）
+        character.status_effects[status_id] = character.status_effects.get(status_id, 0) + turns
 
         # 防御バフ効果を適用
         if new_status_data.get("type") == "defense_buff":
@@ -60,7 +60,9 @@ class StatusEffectProcessor:
             if status_data.get("type") == "end_of_turn_heal":
                 character.heal(status_data.get("value", 0))
             elif status_data.get("type") == "end_of_turn_damage":
-                character.take_damage(status_data.get("value", 0))
+                # 毒のダメージは現在のターン数と同じ
+                damage = character.status_effects[status_id]
+                character.take_damage(damage)
             
             # ターン数の減少 (永続効果でない場合)
             if character.status_effects.get(status_id, 0) != -1:

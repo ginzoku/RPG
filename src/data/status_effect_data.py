@@ -33,10 +33,9 @@ STATUS_EFFECTS = {
         "name": "毒",
         "icon": "P",
         "type": "end_of_turn_damage",
-        "value": 5,
         "color": settings.PURPLE,
         "is_debuff": True,
-        "description": "ターン終了時に5ダメージを受ける"
+        "description": "ターン終了時に現在の毒のターン数と同じダメージを受ける"
     },
     "barrier": {
         "name": "バリア",
