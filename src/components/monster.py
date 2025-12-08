@@ -16,6 +16,7 @@ class Monster(Character):
         self.animation_start_time: int = 0
         self.original_x: int = x
         self.animation_type: str | None = None # 'attack' or 'shake'
+        self.pending_conversation_id: str | None = None # 会話イベントを一時保持
 
     def choose_action(self) -> str:
         """行動パターンからランダムに行動を一つ選択する"""

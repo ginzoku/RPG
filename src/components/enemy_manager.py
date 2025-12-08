@@ -78,21 +78,23 @@ class EnemyManager:
 
                 is_conversation = effects and effects[0].get("type") == "conversation_event"
 
-                if is_conversation:
-                    conversation_id = effects[0]["conversation_id"]
-                    self.battle_scene.start_conversation(conversation_id)
-                    return log_messages
-                else:
-                    # 通常のアクションを実行してアニメーションを設定
-                    ActionHandler.execute_monster_action(enemy, enemy.targets, action_id)
-                    
+                # アニメーションタイプを決定
+                enemy.animation_type = "shake"  # デフォルトはシェイク
+                if not is_conversation:
                     intent_type = action_data.get("intent_type", "unknown")
-                    enemy.animation_type = "shake"
                     if intent_type in ["attack", "attack_debuff"]:
                         enemy.animation_type = "attack"
-                    
-                    enemy.is_animating = True
-                    enemy.animation_start_time = pygame.time.get_ticks()
+                
+                # アニメーション開始
+                enemy.is_animating = True
+                enemy.animation_start_time = pygame.time.get_ticks()
+
+                if is_conversation:
+                    # 会話の場合は、IDを保持して実際のアクションは保留
+                    enemy.pending_conversation_id = effects[0]["conversation_id"]
+                else:
+                    # 通常のアクションは即時実行
+                    ActionHandler.execute_monster_action(enemy, enemy.targets, action_id)
             else:
                 # アニメーション更新
                 elapsed_time = pygame.time.get_ticks() - enemy.animation_start_time
@@ -109,10 +111,19 @@ class EnemyManager:
                         shake_offset = math.sin(progress * math.pi * 4) * 10
                         enemy.x = enemy.original_x + shake_offset
                 else:
+                    # アニメーション終了処理
                     enemy.is_animating = False
                     enemy.x = enemy.original_x
                     enemy.animation_type = None
-                    self.acting_enemy_index += 1
+
+                    if enemy.pending_conversation_id:
+                        # 保留されていた会話を開始
+                        self.battle_scene.start_conversation(enemy.pending_conversation_id)
+                        enemy.pending_conversation_id = None
+                        # 次の敵へは進めない（会話から戻ってきたときに進む）
+                    else:
+                        # 通常のアクションの場合は次の敵へ
+                        self.acting_enemy_index += 1
         
         return log_messages
 
