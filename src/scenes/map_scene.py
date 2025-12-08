@@ -8,20 +8,33 @@ from ..data.map_data import MAP_DATA
 class MapScene:
     """マップの状態を管理するクラス"""
     def __init__(self):
-        self.grid_size = 40 # 1マスのサイズ
-        self.map_width = settings.SCREEN_WIDTH // self.grid_size
-        self.map_height = settings.SCREEN_HEIGHT // self.grid_size
-
         self.map_data = MAP_DATA
+        
+        # マップデータからマップの次元を決定
+        self.map_height = len(self.map_data)
+        self.map_width = len(self.map_data[0]) if self.map_height > 0 else 0
+
+        # マップ全体が画面に収まるようにグリッドサイズを計算
+        if self.map_width > 0 and self.map_height > 0:
+            grid_size_w = settings.SCREEN_WIDTH // self.map_width
+            grid_size_h = settings.SCREEN_HEIGHT // self.map_height
+            self.grid_size = min(grid_size_w, grid_size_h)
+        else:
+            self.grid_size = 0 # マップデータがない場合は0に
+
         self.player_rect = pygame.Rect(12 * self.grid_size, 7 * self.grid_size, self.grid_size, self.grid_size) # プレイヤーの初期位置
-        # 敵シンボルをリストで管理
-        self.enemies = [
-            EnemySymbol(200, 200, "goblin_duo"),
-            EnemySymbol(400, 300, "spider_duo"),
-            EnemySymbol(720, 400, "shadow_eye_solo"),
-            EnemySymbol(400, 400, "conversation_test_group")
-            
+        
+        # 敵シンボルをグリッド座標で管理
+        enemy_positions = [
+            (5, 5, "goblin_duo"),
+            (10, 8, "spider_duo"),
+            (18, 10, "shadow_eye_solo"),
+            (10, 10, "conversation_test_group")
         ]
+        self.enemies = [
+            EnemySymbol(gx, gy, self.grid_size, group_id) for gx, gy, group_id in enemy_positions
+        ]
+        
         # NPCをリストで管理
         self.npcs = [
             Npc(10 * self.grid_size, 6 * self.grid_size, self.grid_size, "npc_1_intro")

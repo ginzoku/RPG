@@ -88,8 +88,9 @@ class BattleView:
         last_hp = self.last_known_hp[char_id]
         if current_hp < last_hp:
             damage = last_hp - current_hp
-            # CharacterStatusDrawerで定義されているキャラクターの幅(80)を使用
-            pos = (character.x + 80 // 2, character.y) 
+            # character_status_drawer と同じ計算でキャラクター幅を求める
+            char_width = int(settings.SCREEN_WIDTH * 0.08)
+            pos = (character.x + char_width // 2, character.y) 
             color = settings.DAMAGE_RED
             font = self.fonts["medium"]
             self.damage_animations.append(DamageIndicator(str(damage), pos, color, font))
@@ -117,10 +118,10 @@ class BattleView:
 
         # ターン終了ボタンの描画 (プレイヤーのターン中のみ)
         if battle_state.turn == "player" and not battle_state.game_over:
-            button_width = 120
-            button_height = 40
-            button_x = settings.SCREEN_WIDTH - button_width - 150
-            button_y = command_area_y - button_height - 10
+            button_width = int(settings.SCREEN_WIDTH * 0.12)
+            button_height = int(command_area_height * 0.2)
+            button_x = settings.SCREEN_WIDTH - button_width - int(settings.SCREEN_WIDTH * 0.1)
+            button_y = command_area_y - button_height - int(command_area_height * 0.05)
             end_turn_button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
 
             pygame.draw.rect(self.screen, (100, 0, 0), end_turn_button_rect, border_radius=5)
@@ -136,10 +137,14 @@ class BattleView:
             discard_count = len(battle_state.deck_manager.discard_pile) if battle_state.deck_manager else 0
             
             deck_text = self.fonts["small"].render(f"山札: {deck_count}", True, settings.WHITE)
-            self.screen.blit(deck_text, (20, settings.SCREEN_HEIGHT - 40))
+            deck_pos_x = int(settings.SCREEN_WIDTH * 0.02)
+            deck_pos_y = settings.SCREEN_HEIGHT - int(settings.SCREEN_HEIGHT * 0.06)
+            self.screen.blit(deck_text, (deck_pos_x, deck_pos_y))
 
             discard_text = self.fonts["small"].render(f"捨て札: {discard_count}", True, settings.WHITE)
-            discard_rect = discard_text.get_rect(right=settings.SCREEN_WIDTH - 20, bottom=settings.SCREEN_HEIGHT - 20)
+            discard_pos_x = settings.SCREEN_WIDTH - int(settings.SCREEN_WIDTH * 0.02)
+            discard_pos_y = settings.SCREEN_HEIGHT - int(settings.SCREEN_HEIGHT * 0.03)
+            discard_rect = discard_text.get_rect(right=discard_pos_x, bottom=discard_pos_y)
             self.screen.blit(discard_text, discard_rect)
 
         # プレイヤーのターンならコマンドを描画

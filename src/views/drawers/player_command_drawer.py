@@ -11,20 +11,22 @@ class PlayerCommandDrawer:
     def __init__(self, fonts: dict):
         self.fonts = fonts
 
-    def draw(self, screen: pygame.Surface, battle_state: BattleScene, log_area_rect: pygame.Rect):
+    def draw(self, screen: pygame.Surface, battle_state: BattleScene, command_area_rect: pygame.Rect):
         # --- 新しいレイアウトロジック ---
         cards = battle_state.deck_manager.hand
         num_commands = len(cards)
         if num_commands == 0:
             return
 
-        card_width = 120
-        card_height = 170
-        overlap_x = 80  # カードが重なる量を減らし、間隔を広げる
-        
+        # --- カードサイズの相対的な定義 ---
+        card_height = int(command_area_rect.height * 0.95)
+        card_width = int(card_height * 0.7)  # 縦横比を固定
+        overlap_x = int(card_width * 0.65)   # カードの重なり具合
+        hover_lift = int(card_height * 0.2)  # ホバー時の浮き上がり量
+
         total_width = (num_commands - 1) * overlap_x + card_width
         start_x = (screen.get_width() - total_width) / 2
-        card_y = screen.get_height() - card_height - 10
+        card_y = screen.get_height() - card_height - int(command_area_rect.height * 0.05)
 
         # ホバーされていないカードを先に描画
         for i, action_id in enumerate(cards):
@@ -39,7 +41,7 @@ class PlayerCommandDrawer:
         if battle_state.hovered_card_index is not None:
             i = battle_state.hovered_card_index
             action_id = cards[i]
-            hover_y = card_y - 30 # 少し上に表示
+            hover_y = card_y - hover_lift # 少し上に表示
             current_card_x = start_x + i * overlap_x
             card_rect = pygame.Rect(current_card_x, hover_y, card_width, card_height)
             self._draw_single_card(screen, battle_state, action_id, card_rect, i)
@@ -70,7 +72,7 @@ class PlayerCommandDrawer:
         # 左上: 消費MP
         cost = action.get("cost", 0)
         if cost >= 0:
-            cost_circle_radius = 16
+            cost_circle_radius = int(card_rect.width * 0.15)
             cost_circle_center = (card_rect.left + cost_circle_radius + 5, card_rect.top + cost_circle_radius + 5)
             pygame.draw.circle(screen, settings.BLUE, cost_circle_center, cost_circle_radius)
             pygame.draw.circle(screen, settings.WHITE, cost_circle_center, cost_circle_radius, 1)
@@ -81,14 +83,14 @@ class PlayerCommandDrawer:
         # 右下: 威力または防御値の表示
         power = ActionHandler.get_card_display_power(battle_state.player, action_id)
         if power is not None:
-            # 効果のタイプに応じて色を決定
             effect_type = action.get("effects", [{}])[0].get("type")
             hits = action.get("effects", [{}])[0].get("hits", 1)
-            color = settings.BLUE # デフォルト
+            color = settings.BLUE
             if effect_type == "damage": color = settings.RED
-            self._draw_power_circle(screen, power, card_rect, color, hits=hits)
+            power_circle_radius = int(card_rect.width * 0.15)
+            self._draw_power_circle(screen, power, card_rect, color, power_circle_radius, hits=hits)
 
-    def _draw_power_circle(self, screen: pygame.Surface, power: int, card_rect: pygame.Rect, color: tuple, power_circle_radius: int = 16, hits: int = 1):
+    def _draw_power_circle(self, screen: pygame.Surface, power: int, card_rect: pygame.Rect, color: tuple, power_circle_radius: int, hits: int = 1):
         power_circle_center = (card_rect.right - power_circle_radius - 5, card_rect.bottom - power_circle_radius - 5)
         pygame.draw.circle(screen, color, power_circle_center, power_circle_radius)
         pygame.draw.circle(screen, settings.WHITE, power_circle_center, power_circle_radius, 1)
@@ -97,7 +99,6 @@ class PlayerCommandDrawer:
         font = self.fonts["card"]
         if hits > 1:
             display_text = f"{power}x{hits}"
-            # 文字数が多い場合はフォントを小さくする
             if len(display_text) > 3:
                 font = self.fonts["small"]
 
@@ -108,10 +109,11 @@ class PlayerCommandDrawer:
     def _draw_enlarged_card(self, screen: pygame.Surface, battle_state: BattleScene, action_id: str):
         action = ACTIONS[action_id]
         
-        card_width = 240
-        card_height = 340
+        # --- 拡大カードサイズの相対的な定義 ---
+        card_height = int(screen.get_height() * 0.6)
+        card_width = int(card_height * 0.7)
         card_x = (screen.get_width() - card_width) / 2
-        card_y = (screen.get_height() - card_height) / 2 - 50
+        card_y = (screen.get_height() - card_height) / 2 - int(screen.get_height() * 0.05)
         card_rect = pygame.Rect(card_x, card_y, card_width, card_height)
 
         # 背景と枠線
@@ -119,9 +121,8 @@ class PlayerCommandDrawer:
         pygame.draw.rect(screen, settings.WHITE, card_rect, 3, border_radius=10)
 
         # アクション名
-        # MPコスト表示エリアを除いたカードの中央に配置する
-        cost_circle_radius = 24
-        cost_area_right_edge = card_rect.left + (cost_circle_radius * 2) + 20 # コスト円の右端+余白
+        cost_circle_radius = int(card_width * 0.12)
+        cost_area_right_edge = card_rect.left + (cost_circle_radius * 2) + 20
         name_area_center_x = cost_area_right_edge + (card_rect.right - cost_area_right_edge) / 2
 
         name_text = self.fonts["small"].render(action["name"], True, settings.WHITE)
@@ -129,18 +130,15 @@ class PlayerCommandDrawer:
         screen.blit(name_text, name_rect)
 
         # 説明文
-        # 最初の効果のpowerをdescriptionに埋め込む
         power_for_desc = ""
         if action.get("effects"): power_for_desc = action["effects"][0].get("power", "")
         description = action.get("description", "").format(power=power_for_desc)
-        # 説明文の描画領域をアクション名の下に設定
         description_rect = pygame.Rect(card_rect.x + 20, name_rect.bottom + 10, card_rect.width - 40, card_rect.height - name_rect.height - 80)
         self._draw_text_multiline(screen, description, self.fonts["card"], description_rect, settings.WHITE)
 
         # 左上: 消費MP
         cost = action.get("cost", 0)
         if cost >= 0:
-            cost_circle_radius = 24
             cost_circle_center = (card_rect.left + cost_circle_radius + 10, card_rect.top + cost_circle_radius + 10)
             pygame.draw.circle(screen, settings.BLUE, cost_circle_center, cost_circle_radius)
             pygame.draw.circle(screen, settings.WHITE, cost_circle_center, cost_circle_radius, 2)
@@ -151,12 +149,12 @@ class PlayerCommandDrawer:
         # 右下: 威力または防御値
         power = ActionHandler.get_card_display_power(battle_state.player, action_id)
         if power is not None:
-            # 効果のタイプに応じて色を決定
             effect_type = action.get("effects", [{}])[0].get("type")
             hits = action.get("effects", [{}])[0].get("hits", 1)
-            color = settings.BLUE # デフォルト
+            color = settings.BLUE
             if effect_type == "damage": color = settings.RED
-            self._draw_power_circle(screen, power, card_rect, color, 24, hits=hits)
+            power_circle_radius = int(card_width * 0.12)
+            self._draw_power_circle(screen, power, card_rect, color, power_circle_radius, hits=hits)
 
     def _draw_text_multiline(self, surface, text, font, rect, color):
         """指定された矩形内にテキストを自動で折り返して描画する"""

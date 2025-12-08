@@ -13,59 +13,67 @@ class CharacterStatusDrawer:
 
     def draw(self, screen: pygame.Surface, character: Character, color: tuple[int, int, int], is_selected_target: bool = False, mouse_pos: tuple[int, int] | None = None):
         """キャラクターのステータス全体を描画するメインメソッド"""
-        char_width = 80
-        char_height = 100
+        # --- 基準となるサイズを画面サイズから相対的に決定 ---
+        char_width = int(settings.SCREEN_WIDTH * 0.08)
+        char_height = int(settings.SCREEN_HEIGHT * 0.15)
+        bar_width = int(char_width * 1.2)
+        bar_height = int(bar_width * 0.15)
+        ui_gap = int(char_height * 0.05)
+        line_gap = int(bar_height * 1.9)
         
         # キャラクター本体の四角形を描画
         pygame.draw.rect(screen, color, (character.x, character.y, char_width, char_height))
         
         # --- 枠線の描画ロジック ---
-        # ターゲット選択中にマウスホバーされている場合のハイライト
         border_color = settings.WHITE
         border_width = 2
         if hasattr(character, 'is_targeted') and character.is_targeted:
             border_color = settings.YELLOW
             border_width = 4
         
-        # ターゲットとして選択されている場合のハイライト (ホバーより優先)
         if is_selected_target:
             border_color = settings.YELLOW
             border_width = 4
         pygame.draw.rect(screen, border_color, (character.x, character.y, char_width, char_height), border_width)
         
+        # --- UI要素のY座標とX座標の基準 ---
+        base_y = character.y + char_height + ui_gap
+        base_x = character.x
+
+        # HPテキストとバー
         hp_text = self.fonts["small"].render(f"HP: {character.current_hp}/{character.max_hp}", True, settings.WHITE)
-        screen.blit(hp_text, (character.x - 10, character.y + char_height + 5))
-
-        # --- UI要素のY座標を整理 ---
-        base_y = character.y + char_height + 5
-        hp_bar_y = base_y + 30  # HPテキストとHPバーの間隔
-
-        self._draw_hp_bar(screen, character, character.x - 10, hp_bar_y, 100, 15)
-        self._draw_defense_buff(screen, character, character.x - 10, hp_bar_y)
+        screen.blit(hp_text, (base_x, base_y))
+        
+        current_y = base_y + hp_text.get_height() + ui_gap
+        self._draw_hp_bar(screen, character, base_x, current_y, bar_width, bar_height)
+        self._draw_defense_buff(screen, character, base_x, current_y, bar_width, bar_height)
+        current_y += line_gap
 
         # プレイヤーの場合のみ正気度とマナを描画
         if character.max_mana > 0 and character.max_sanity is not None:
-            sanity_bar_y = hp_bar_y + 30 # HPバーと正気度バーの間隔
-            mana_orbs_y = sanity_bar_y + 30 # 正気度バーとマナの間隔
-            status_effects_y = mana_orbs_y + 30 # マナと状態異常の間隔
-
             san_text = self.fonts["small"].render(f"SAN: {character.current_sanity}/{character.max_sanity}", True, settings.WHITE)
-            screen.blit(san_text, (character.x - 10, hp_bar_y + 5))
-            self._draw_sanity_bar(screen, character, character.x - 10, sanity_bar_y, 100, 15)
-            self._draw_mana_orbs(screen, character, character.x - 10, mana_orbs_y)
-            self._draw_status_effects(screen, character, character.x - 10, status_effects_y, mouse_pos)
-        else:
-            # 敵の場合
-            status_effects_y = hp_bar_y + 25 # HPバーの下
-            self._draw_status_effects(screen, character, character.x - 10, status_effects_y, mouse_pos)
+            screen.blit(san_text, (base_x, current_y))
+            current_y += san_text.get_height() + ui_gap
+            
+            self._draw_sanity_bar(screen, character, base_x, current_y, bar_width, bar_height)
+            current_y += line_gap
+
+            self._draw_mana_orbs(screen, character, base_x, current_y)
+            current_y += bar_height + line_gap # マナオーブの高さ分としてbar_heightを使用
+
+        # ステータス効果の描画
+        self._draw_status_effects(screen, character, base_x, current_y, mouse_pos)
 
         # 敵の場合のみインテントを描画
         if hasattr(character, 'next_action') and character.next_action:
-            self._draw_intent(screen, character)
+            self._draw_intent(screen, character, char_width)
 
     def _draw_status_effects(self, screen: pygame.Surface, character: Character, x: int, y: int, mouse_pos: tuple[int, int] | None = None):
-        icon_radius = 12
-        icon_gap = 5
+        char_width = int(settings.SCREEN_WIDTH * 0.08)
+        bar_width = int(char_width * 1.2)
+        bar_height = int(bar_width * 0.15)
+        icon_radius = int(bar_height * 0.8)
+        icon_gap = int(icon_radius * 0.4)
         status_offset_x = 0
         
         font = self.fonts["card"]
@@ -205,11 +213,12 @@ class CharacterStatusDrawer:
         pygame.draw.rect(screen, settings.YELLOW, (x, y, sanity_bar_width, height))
         pygame.draw.rect(screen, settings.WHITE, (x, y, width, height), 1)
 
-    def _draw_defense_buff(self, screen: pygame.Surface, character: Character, x: int, y: int):
+    def _draw_defense_buff(self, screen: pygame.Surface, character: Character, x: int, y: int, bar_width: int, bar_height: int):
         if character.defense_buff > 0:
-            radius = 15
-            circle_x = x + 100 + radius + 5  # HPバーの右側に配置
-            circle_y = y + 7 # HPバーの高さの中心に合わせる
+            radius = int(bar_height * 0.9)
+            gap = int(bar_width * 0.05)
+            circle_x = x + bar_width + gap + radius
+            circle_y = y + bar_height // 2
             
             # 白い丸
             pygame.draw.circle(screen, settings.WHITE, (circle_x, circle_y), radius)
@@ -221,8 +230,12 @@ class CharacterStatusDrawer:
             screen.blit(text, text_rect)
 
     def _draw_mana_orbs(self, screen: pygame.Surface, character: Character, x: int, y: int):
-        orb_radius = 10
-        orb_gap = 5
+        char_width = int(settings.SCREEN_WIDTH * 0.08)
+        bar_width = int(char_width * 1.2)
+        bar_height = int(bar_width * 0.15)
+        orb_radius = int(bar_height * 0.7)
+        orb_gap = int(orb_radius * 0.5)
+
         for i in range(character.max_mana):
             orb_x = x + i * (orb_radius * 2 + orb_gap) + orb_radius
             if i < character.current_mana:
@@ -232,7 +245,7 @@ class CharacterStatusDrawer:
             pygame.draw.circle(screen, color, (orb_x, y), orb_radius)
             pygame.draw.circle(screen, settings.WHITE, (orb_x, y), orb_radius, 1)
 
-    def _draw_intent(self, screen: pygame.Surface, monster: Character):
+    def _draw_intent(self, screen: pygame.Surface, monster: Character, char_width: int):
         action_id = monster.next_action
         action_data = MONSTER_ACTIONS.get(action_id)
         if not action_data:
@@ -294,5 +307,5 @@ class CharacterStatusDrawer:
         # インテントの描画
         full_text = f"{icon} {intent_text}".strip()
         text_surface = self.fonts["medium"].render(full_text, True, text_color)
-        text_rect = text_surface.get_rect(centerx=monster.x + 40, bottom=monster.y - 10)
+        text_rect = text_surface.get_rect(centerx=monster.x + char_width // 2, bottom=monster.y - 10)
         screen.blit(text_surface, text_rect)

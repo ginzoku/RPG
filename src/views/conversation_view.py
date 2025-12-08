@@ -7,8 +7,29 @@ class ConversationView:
     def __init__(self, default_background_path: str | None):
         self.font = self._get_japanese_font(24)
         self.speaker_font = self._get_japanese_font(28)
-        self.dialogue_box_rect = pygame.Rect(50, settings.SCREEN_HEIGHT - 200, settings.SCREEN_WIDTH - 100, 150)
-        self.speaker_rect = pygame.Rect(50, settings.SCREEN_HEIGHT - 230, 200, 30)
+        
+        # UIの相対的なサイズと位置を定義
+        dialogue_box_height = int(settings.SCREEN_HEIGHT * 0.25)
+        dialogue_box_margin_x = int(settings.SCREEN_WIDTH * 0.05)
+        dialogue_box_y = settings.SCREEN_HEIGHT - dialogue_box_height - int(settings.SCREEN_HEIGHT * 0.05)
+
+        self.dialogue_box_rect = pygame.Rect(
+            dialogue_box_margin_x,
+            dialogue_box_y,
+            settings.SCREEN_WIDTH - (dialogue_box_margin_x * 2),
+            dialogue_box_height
+        )
+
+        speaker_box_height = int(settings.SCREEN_HEIGHT * 0.05)
+        speaker_box_width = int(settings.SCREEN_WIDTH * 0.2)
+        speaker_box_y_offset = int(settings.SCREEN_HEIGHT * 0.01)
+
+        self.speaker_rect = pygame.Rect(
+            dialogue_box_margin_x,
+            dialogue_box_y - speaker_box_height - speaker_box_y_offset,
+            speaker_box_width,
+            speaker_box_height
+        )
 
         self.speaker_name = ""
         self.dialogue_text = ""
@@ -78,7 +99,14 @@ class ConversationView:
 
         # 選択肢の描画
         if self.choices:
+            # 選択肢の描画位置と行の高さを相対的に計算
+            choice_start_x = self.dialogue_box_rect.x + int(self.dialogue_box_rect.width * 0.05)
+            # ダイアログボックス上部から、ボックスの高さの35%の位置を開始点とする
+            choice_start_y = self.dialogue_box_rect.y + int(self.dialogue_box_rect.height * 0.35)
+            line_height = self.font.get_height() + 10  # フォントの高さに少しマージンを追加
+
             for i, choice_text in enumerate(self.choices):
                 color = (255, 255, 0) if i == self.selected_choice_index else (255, 255, 255)
                 choice_surface = self.font.render(f"> {choice_text}" if i == self.selected_choice_index else choice_text, True, color)
-                screen.blit(choice_surface, (self.dialogue_box_rect.x + 30, self.dialogue_box_rect.y + 50 + i * 30))
+                # 計算された相対位置に描画
+                screen.blit(choice_surface, (choice_start_x, choice_start_y + i * line_height))
