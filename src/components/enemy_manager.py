@@ -21,7 +21,7 @@ class EnemyManager:
         self.enemies: list[Monster] = []
         self.turn_state: str = "start" # "start", "acting", "finished"
         self.acting_enemy_index: int = 0
-        self.animation_duration: int = 400 # 0.4秒
+        self.animation_duration: int = 300 # 0.3秒
 
     def setup_enemies(self, group_id: str | None = None):
         """敵グループを生成し、初期化する"""
@@ -37,7 +37,8 @@ class EnemyManager:
             monster_data = MONSTERS[enemy_info["id"]]
             pos = positions[enemy_info["pos_index"]]
             enemy = Monster(name=monster_data["name"], max_hp=monster_data["max_hp"], attack_power=monster_data["attack_power"],
-                            actions=monster_data["actions"], x=pos[0], y=pos[1], gold=monster_data.get("gold", 0))
+                            actions=monster_data["actions"], x=pos[0], y=pos[1], gold=monster_data.get("gold", 0),
+                            image_path=monster_data.get("image"))
             self.enemies.append(enemy)
         
         self.enemies.sort(key=lambda e: e.x)

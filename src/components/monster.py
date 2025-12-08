@@ -3,9 +3,9 @@ import random
 from .character import Character
 
 class Monster(Character):
-    def __init__(self, name: str, max_hp: int, attack_power: int, actions: list[str], x: int, y: int, gold: int):
+    def __init__(self, name: str, max_hp: int, attack_power: int, actions: list[str], x: int, y: int, gold: int, image_path: str | None = None):
         # モンスターはMPを使わない想定なので max_mp=0 で初期化
-        super().__init__(name, max_hp, 0, attack_power, x, y, character_type='monster')
+        super().__init__(name, max_hp, 0, attack_power, x, y, character_type='monster', image_path=image_path)
         self.actions = actions
         self.gold = gold
         self.next_action: str | None = None

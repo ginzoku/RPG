@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 import math
+import pygame
 from ..data.relic_data import RELICS
 from .status_effect_processor import StatusEffectProcessor
 
 class Character:
-    def __init__(self, name: str, max_hp: int, max_mp: int, attack_power: int, x: int, y: int, character_type: str, max_sanity: int | None = None):
+    def __init__(self, name: str, max_hp: int, max_mp: int, attack_power: int, x: int, y: int, character_type: str, max_sanity: int | None = None, image_path: str | None = None):
         self.name: str = name
         self.character_type: str = character_type
         self.max_hp: int = max_hp
@@ -26,6 +27,13 @@ class Character:
         self.relics: list[str] = [] # まず空で初期化
         self.is_targeted: bool = False # ターゲット選択時にハイライトするためのフラグ
         self.gold: int = 0 # 所持ゴールド
+
+        self.image = None
+        if image_path:
+            try:
+                self.image = pygame.image.load(image_path).convert_alpha()
+            except pygame.error as e:
+                print(f"Failed to load image: {image_path}. Error: {e}")
 
         # プレイヤーの場合のみ初期レリックを適用
         if self.character_type == 'player':

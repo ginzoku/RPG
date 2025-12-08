@@ -21,8 +21,14 @@ class CharacterStatusDrawer:
         ui_gap = int(char_height * 0.05)
         line_gap = int(bar_height * 1.9)
         
-        # キャラクター本体の四角形を描画
-        pygame.draw.rect(screen, color, (character.x, character.y, char_width, char_height))
+        # キャラクター本体の描画
+        if character.image:
+            # 画像をキャラクターのサイズに合わせてリサイズ
+            scaled_image = pygame.transform.scale(character.image, (char_width, char_height))
+            screen.blit(scaled_image, (character.x, character.y))
+        else:
+            # 画像がない場合はこれまで通り四角形を描画
+            pygame.draw.rect(screen, color, (character.x, character.y, char_width, char_height))
         
         # --- 枠線の描画ロジック ---
         border_color = settings.WHITE
@@ -36,8 +42,19 @@ class CharacterStatusDrawer:
             border_width = 4
         pygame.draw.rect(screen, border_color, (character.x, character.y, char_width, char_height), border_width)
         
-        # --- UI要素のY座標とX座標の基準 ---
-        base_y = character.y + char_height + ui_gap
+        # --- 名前の描画 ---
+        # プレイヤーの場合は名前を表示しない（UIが込み入るため）
+        if character.character_type != 'player':
+            name_text = self.fonts["small"].render(character.name, True, settings.WHITE)
+            name_rect = name_text.get_rect(centerx=character.x + char_width / 2, y=character.y + char_height + ui_gap)
+            screen.blit(name_text, name_rect)
+            
+            # --- UI要素のY座標とX座標の基準 ---
+            base_y = name_rect.bottom + ui_gap
+        else:
+            # --- UI要素のY座標とX座標の基準 ---
+            base_y = character.y + char_height + ui_gap
+
         base_x = character.x
         current_y = base_y
 
