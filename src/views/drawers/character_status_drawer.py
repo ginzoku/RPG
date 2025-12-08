@@ -34,14 +34,23 @@ class CharacterStatusDrawer:
         # --- 名前の描画 ---
         # プレイヤーの場合は名前を表示しない（UIが込み入るため）
         if character.character_type != 'player':
-            name_to_render = character.name
-            if is_selected_target:
-                name_to_render = f"▶ {character.name}"
+            # 選択されているかどうかに基づいて色を決定
+            name_color = settings.YELLOW if is_selected_target else settings.WHITE
 
-            name_text = self.fonts["small"].render(name_to_render, True, settings.WHITE)
+            # 名前をレンダリング
+            name_text = self.fonts["small"].render(character.name, True, name_color)
             name_rect = name_text.get_rect(centerx=character.x + char_width / 2, y=character.y + char_height + ui_gap)
-            screen.blit(name_text, name_rect)
             
+            # 名前を描画
+            screen.blit(name_text, name_rect)
+
+            # 選択されている場合、名前の左側にアイコンを描画
+            if is_selected_target:
+                icon_text = self.fonts["small"].render("▶", True, name_color)
+                # name_rect.left は名前の左端のx座標
+                icon_rect = icon_text.get_rect(right=name_rect.left - 5, centery=name_rect.centery) # 5はアイコンと名前の間のギャップ
+                screen.blit(icon_text, icon_rect)
+
             # --- UI要素のY座標とX座標の基準 ---
             base_y = name_rect.bottom + ui_gap
         else:
