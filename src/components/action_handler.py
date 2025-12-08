@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 import math
 import random
+import pygame # Added pygame import
 from .character import Character
 from .deck_manager import DeckManager
+from ..config import settings # Added settings import
 from ..data.action_data import ACTIONS
 from ..data.monster_action_data import MONSTER_ACTIONS
 from ..data.permanent_effect_data import PERMANENT_EFFECTS
@@ -57,6 +59,16 @@ class ActionHandler:
             modified_damage = StatusEffectProcessor.modify_outgoing_damage(source, base_damage)
             final_damage = max(1, modified_damage)
             target_character.take_damage(final_damage)
+
+            # ヒットアニメーションをトリガー
+            target_character.is_hit_animating = True
+            target_character.hit_animation_start_time = pygame.time.get_ticks()
+            target_character.hit_animation_duration = settings.ANIMATION_SETTINGS["hit_slide"]["duration"]
+            # 攻撃元がターゲットの左にいる場合、ターゲットは右にスライド
+            if source.x < target_character.x:
+                target_character.hit_animation_direction = 1
+            else:
+                target_character.hit_animation_direction = -1
 
         elif effect_type == "heal":
             power = effect.get("power", 0)

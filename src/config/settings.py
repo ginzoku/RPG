@@ -30,6 +30,10 @@ ANIMATION_SETTINGS: dict[str, dict] = {
         "duration": 0.2, # seconds
         "amplitude": 10, # pixels
         "frequency_factor": 4, # for math.sin(progress * math.pi * frequency_factor)
+    },
+    "hit_slide": { # New setting for hit animation
+        "duration": 0.2, # seconds
+        "distance": 20, # pixels
     }
 }
 

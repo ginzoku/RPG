@@ -51,6 +51,10 @@ class BattleView:
         for enemy in battle_state.enemy_manager.enemies:
             self._check_for_damage(enemy)
 
+        self._update_hit_animation(battle_state.player) # Call for player
+        for enemy in battle_state.enemy_manager.enemies:
+            self._update_hit_animation(enemy) # Call for each enemy
+
         mouse_pos = pygame.mouse.get_pos()
         self.status_drawer.draw(self.screen, battle_state.player, settings.BLUE, False, mouse_pos)
         for i, enemy in enumerate(battle_state.enemy_manager.enemies):
@@ -93,6 +97,31 @@ class BattleView:
             self.damage_animations.append(DamageIndicator(str(damage), pos, color, font))
 
         self.last_known_hp[char_id] = current_hp
+
+    def _update_hit_animation(self, character: Character):
+        if not character.is_hit_animating:
+            return
+
+        elapsed_time = pygame.time.get_ticks() - character.hit_animation_start_time
+        duration_ms = character.hit_animation_duration * 1000
+
+        if elapsed_time < duration_ms:
+            progress = elapsed_time / duration_ms
+            
+            # スライドは最初動いて最後戻る
+            # 0 -> 1 -> 0 のプログレス
+            # 例: 0.2秒のアニメーションなら、0.1秒で最大距離に達し、0.2秒で元の位置に戻る
+            if progress <= 0.5:
+                current_progress = progress * 2 # 0 -> 1
+            else:
+                current_progress = (1 - progress) * 2 # 1 -> 0
+            
+            slide_distance = settings.ANIMATION_SETTINGS["hit_slide"]["distance"]
+            offset = slide_distance * character.hit_animation_direction * current_progress
+            character.x = character.original_x + offset
+        else:
+            character.is_hit_animating = False
+            character.x = character.original_x # アニメーション終了時には元の位置に戻す
 
     def _update_and_draw_animations(self):
         # 生きているアニメーションのみを保持

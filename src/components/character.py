@@ -18,6 +18,7 @@ class Character:
         self.defense_power: int = 0
         self.x: int = x
         self.y: int = y
+        self.original_x: int = x # Added this line
         self.base_attack_power: int = attack_power
         self.base_defense_power: int = 0
         self.is_alive: bool = True
@@ -27,6 +28,12 @@ class Character:
         self.relics: list[str] = [] # まず空で初期化
         self.is_targeted: bool = False # ターゲット選択時にハイライトするためのフラグ
         self.gold: int = 0 # 所持ゴールド
+
+        # Hit Animation attributes
+        self.is_hit_animating: bool = False
+        self.hit_animation_start_time: int = 0
+        self.hit_animation_duration: float = 0.0
+        self.hit_animation_direction: int = 0 # 1 for right, -1 for left
 
         self.image = None
         if image_path:
