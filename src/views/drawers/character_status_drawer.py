@@ -30,22 +30,15 @@ class CharacterStatusDrawer:
             # 画像がない場合はこれまで通り四角形を描画
             pygame.draw.rect(screen, color, (character.x, character.y, char_width, char_height))
         
-        # --- 枠線の描画ロジック ---
-        border_color = settings.WHITE
-        border_width = 2
-        if hasattr(character, 'is_targeted') and character.is_targeted:
-            border_color = settings.YELLOW
-            border_width = 4
-        
-        if is_selected_target:
-            border_color = settings.YELLOW
-            border_width = 4
-        pygame.draw.rect(screen, border_color, (character.x, character.y, char_width, char_height), border_width)
         
         # --- 名前の描画 ---
         # プレイヤーの場合は名前を表示しない（UIが込み入るため）
         if character.character_type != 'player':
-            name_text = self.fonts["small"].render(character.name, True, settings.WHITE)
+            name_to_render = character.name
+            if is_selected_target:
+                name_to_render = f"▶ {character.name}"
+
+            name_text = self.fonts["small"].render(name_to_render, True, settings.WHITE)
             name_rect = name_text.get_rect(centerx=character.x + char_width / 2, y=character.y + char_height + ui_gap)
             screen.blit(name_text, name_rect)
             
