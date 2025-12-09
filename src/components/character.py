@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import math
 import pygame
+
+from .relic_effect_processor import RelicEffectProcessor
 from ..data.relic_data import RELICS
 from .status_effect_processor import StatusEffectProcessor
 
@@ -44,17 +46,12 @@ class Character:
 
         # プレイヤーの場合のみ初期レリックを適用
         if self.character_type == 'player':
-            self.relics = ["red_stone"] # 初期レリック
-            # レリックの効果を初期適用
-            self._apply_initial_relic_effects()
+            self.relics = ["red_stone", "cursed_armor"] # 初期レリック
+            # # レリックの効果を初期適用
+            # self._apply_relic_effects()
 
-    def _apply_initial_relic_effects(self):
-        for relic_id in self.relics:
-            relic_data = RELICS.get(relic_id)
-            if relic_data and "effects" in relic_data:
-                for effect in relic_data["effects"]:
-                    if effect["type"] == "stat_change" and effect["stat"] == "attack_power":
-                        self.attack_power += effect["value"]
+    def _apply_relic_effects(self):
+        RelicEffectProcessor.apply_relic_effects(self)
     
     def take_damage(self, damage: int):
         # ステータス効果による被ダメージ修飾
@@ -122,6 +119,12 @@ class Character:
         """ターン終了時の状態異常処理（処理はプロセッサに委譲）"""
         StatusEffectProcessor.process_end_of_turn(self)
 
+    def process_turn_start_relic_effects(self):
+        RelicEffectProcessor.process_turn_start_effects(self)
+
+    def process_turn_end_relic_effects(self):
+        RelicEffectProcessor.process_turn_end_effects(self)
+
     def get_hp_percentage(self) -> float:
         return (self.current_hp / self.max_hp) * 100
     
@@ -141,3 +144,4 @@ class Character:
         self.defense_buff = 0
         self.status_effects.clear()
         self.permanent_effects.clear()
+        self._apply_relic_effects()
