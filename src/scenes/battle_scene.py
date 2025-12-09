@@ -41,9 +41,6 @@ class BattleScene:
         self.enemy_manager.setup_enemies(enemy_group_id)
         self.input_handler = InputHandler(self)
         
-        # レリックの初期効果を適用 (敵の情報が必要なためここで適用)
-        self.player._apply_relic_effects(self.enemy_manager.enemies)
-        
         # ゲーム状態
         self.turn: str = "player"
         self.game_over: bool = False
