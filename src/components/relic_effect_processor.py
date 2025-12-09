@@ -46,3 +46,13 @@ class RelicEffectProcessor:
                         for enemy in enemies:
                             if enemy.is_alive:
                                 enemy.apply_status("poison", effect["value"])
+
+    @staticmethod
+    def process_timed_effects(character: "Character", turn_count: int):
+        # 特定のターンに発動する効果
+        for relic_id in character.relics:
+            relic_data = RELICS.get(relic_id)
+            if relic_data and "effects" in relic_data:
+                for effect in relic_data["effects"]:
+                    if effect.get("type") == "gain_defense_on_turn" and effect.get("turn") == turn_count:
+                        character.defense_buff += effect["value"]

@@ -49,6 +49,7 @@ class BattleScene:
         self.hovered_relic_index: int | None = None
         self.targeted_enemy_index: int | None = None # 現在選択されている敵のインデックス
         self.reward_gold: int = 0 # 勝利時に獲得するゴールド
+        self.turn_count: int = 0 # ターンカウンター
         
         # プレイヤーの戦闘開始時の状態リセット
         self.player.reset_for_battle()
@@ -176,8 +177,12 @@ class BattleScene:
                 # プレイヤーの防御値をリセット
                 self.player.defense_buff = 0
                 
+                # ターンカウンターをインクリメント
+                self.turn_count += 1
+                
                 # プレイヤーのターン開始時のレリック効果を処理
                 self.player.process_turn_start_relic_effects()
+                self.player.process_timed_relic_effects(self.turn_count)
                 self._check_game_over() # レリックの効果で死ぬ可能性
                 if self.game_over: return # ゲームオーバーなら即時終了
                 

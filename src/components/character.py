@@ -46,7 +46,7 @@ class Character:
 
         # プレイヤーの場合のみ初期レリックを適用
         if self.character_type == 'player':
-            self.relics = ["red_stone", "cursed_armor", "poison_orb"] # 初期レリック
+            self.relics = ["red_stone", "cursed_armor", "poison_orb", "shield_of_timing"] # 初期レリック
             # レリックの効果を初期適用
             self._apply_relic_effects()
 
@@ -124,6 +124,9 @@ class Character:
 
     def process_turn_end_relic_effects(self, enemies: list["Character"]):
         RelicEffectProcessor.process_turn_end_effects(self, enemies)
+
+    def process_timed_relic_effects(self, turn_count: int):
+        RelicEffectProcessor.process_timed_effects(self, turn_count)
 
     def get_hp_percentage(self) -> float:
         return (self.current_hp / self.max_hp) * 100

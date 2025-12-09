@@ -27,5 +27,13 @@ RELICS = {
             {"type": "damage_all_enemies_on_turn_end", "value": 1},
             {"type": "apply_poison_to_all_enemies_on_turn_end", "value": 1}
         ]
+    },
+    "shield_of_timing": {
+        "name": "タイミングの盾",
+        "description": "戦闘の3ターン目に防御を18得る。",
+        "color": settings.BLUE,
+        "effects": [
+            {"type": "gain_defense_on_turn", "value": 18, "turn": 3}
+        ]
     }
 }
