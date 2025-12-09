@@ -24,10 +24,9 @@ STATUS_EFFECTS = {
         "name": "再生",
         "icon": "R",
         "type": "end_of_turn_heal",
-        "value": 5,  # ターン終了時に5回復
         "color": settings.GREEN,
         "is_debuff": False,
-        "description": "ターン終了時にHPが5回復する"
+        "description": "ターン終了時に現在の再生のターン数と同じHPが回復する"
     },
     "poison": {
         "name": "毒",

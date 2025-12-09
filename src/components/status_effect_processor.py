@@ -58,7 +58,9 @@ class StatusEffectProcessor:
             
             # ターン終了時効果の発動
             if status_data.get("type") == "end_of_turn_heal":
-                character.heal(status_data.get("value", 0))
+                # 再生の回復量は現在のターン数と同じ
+                heal_amount = character.status_effects[status_id]
+                character.heal(heal_amount)
             elif status_data.get("type") == "end_of_turn_damage":
                 # 毒のダメージは現在のターン数と同じ
                 damage = character.status_effects[status_id]
