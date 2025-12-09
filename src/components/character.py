@@ -14,6 +14,7 @@ class Character:
         self.current_hp: int = max_hp
         self.max_mana: int = max_mp
         self.current_mana: int = max_mp
+        self.base_max_mana: int = max_mp
         self.max_sanity: int | None = max_sanity
         self.current_sanity: int | None = max_sanity
         self.attack_power: int = attack_power
@@ -46,12 +47,12 @@ class Character:
 
         # プレイヤーの場合のみ初期レリックを適用
         if self.character_type == 'player':
-            self.relics = ["red_stone", "cursed_armor", "poison_orb", "shield_of_timing"] # 初期レリック
-            # レリックの効果を初期適用
-            self._apply_relic_effects()
+            self.relics = ["red_stone", "cursed_armor", "poison_orb", "shield_of_timing", "mana_exchange_amulet"] # 初期レリック
+            # レリックの効果はBattleScene.resetで適用されるため、ここでは呼び出さない
+            # self._apply_relic_effects()
 
-    def _apply_relic_effects(self):
-        RelicEffectProcessor.apply_relic_effects(self)
+    def _apply_relic_effects(self, enemies: list["Character"]):
+        RelicEffectProcessor.apply_relic_effects(self, enemies)
     
     def take_damage(self, damage: int):
         # ステータス効果による被ダメージ修飾
@@ -139,12 +140,13 @@ class Character:
         if self.max_sanity is None or self.max_sanity == 0: return 0
         return (self.current_sanity / self.max_sanity) * 100
 
-    def reset_for_battle(self):
+    def reset_for_battle(self, enemies: list["Character"]):
         """戦闘開始時にプレイヤーの状態をリセットする"""
         self.attack_power = self.base_attack_power
         self.defense_power = self.base_defense_power
+        self.max_mana = self.base_max_mana
         self.fully_recover_mana()
         self.defense_buff = 0
         self.status_effects.clear()
         self.permanent_effects.clear()
-        self._apply_relic_effects()
+        self._apply_relic_effects(enemies)

@@ -35,5 +35,15 @@ RELICS = {
         "effects": [
             {"type": "gain_defense_on_turn", "value": 18, "turn": 3}
         ]
+    },
+    "mana_exchange_amulet": {
+        "name": "マナ交換の護符",
+        "description": "最大マナが1増加する。自身の攻撃力が1減少し、敵全体の攻撃力が1増加する。",
+        "color": settings.YELLOW,
+        "effects": [
+            {"type": "stat_change", "stat": "max_mana", "value": 1},
+            # {"type": "stat_change", "stat": "attack_power", "value": -1}, # 自身に適用
+            {"type": "enemy_stat_change", "stat": "attack_power", "value": 1} # 敵全体に適用
+        ]
     }
 }
