@@ -61,6 +61,10 @@ class PlayerCommandDrawer:
         else:
             card_bg_color, card_border_color, text_color = ((40, 40, 60), settings.WHITE, settings.LIGHT_BLUE)
 
+        # 廃棄カードの特別な表示
+        if action.get("exhaust", False):
+            card_border_color = settings.YELLOW # 例えば黄色に
+
         pygame.draw.rect(screen, card_bg_color, card_rect, border_radius=5)
         pygame.draw.rect(screen, card_border_color, card_rect, 2, border_radius=5)
 
@@ -118,7 +122,10 @@ class PlayerCommandDrawer:
 
         # 背景と枠線
         pygame.draw.rect(screen, (60, 60, 80), card_rect, border_radius=10)
-        pygame.draw.rect(screen, settings.WHITE, card_rect, 3, border_radius=10)
+        card_border_color = settings.WHITE
+        if action.get("exhaust", False):
+            card_border_color = settings.YELLOW # 例えば黄色に
+        pygame.draw.rect(screen, card_border_color, card_rect, 3, border_radius=10)
 
         # アクション名
         cost_circle_radius = int(card_width * 0.12)

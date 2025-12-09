@@ -148,5 +148,22 @@ ACTIONS = {
         "effects": [
             {"type": "conversation_event", "conversation_id": "monster_battle_intro_conversation"}
         ]
+    },
+    "throwing_knife": {
+        "name": "投げナイフ",
+        "cost": 0,
+        "exhaust": True,
+        "description": "敵に4の物理ダメージを与える。このカードは廃棄される。",
+        "effects": [
+            {"type": "damage", "target_scope": "single", "power": 4, "hits": 1}
+        ]
+    },
+    "rain_of_knives": {
+        "name": "ナイフの雨",
+        "cost": 2,
+        "description": "0コスト4ダメージの「投げナイフ」を3枚手札に加える。",
+        "effects": [
+            {"type": "add_card_to_hand", "target_scope": "self", "card_id": "throwing_knife", "amount": 3}
+        ]
     }
 }

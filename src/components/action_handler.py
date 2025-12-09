@@ -87,6 +87,12 @@ class ActionHandler:
             num_to_draw = effect.get("power", 1)
             deck_manager.draw_cards(num_to_draw)
         
+        elif effect_type == "add_card_to_hand" and deck_manager:
+            card_id = effect["card_id"]
+            amount = effect.get("amount", 1)
+            for _ in range(amount):
+                deck_manager.add_card_to_hand(card_id)
+        
         elif effect_type == "sanity_damage":
             target_character.take_sanity_damage(effect.get("power", 0))
 

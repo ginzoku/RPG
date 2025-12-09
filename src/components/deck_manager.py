@@ -4,7 +4,17 @@ from ..data.action_data import ACTIONS
 
 class DeckManager:
     def __init__(self):
-        initial_deck = (["slash"] * 2) + (["guard"] * 5) + (["fire_ball"] * 1) + (["expose_weakness"] * 1) + (["healing_light"] * 1) + (["draw_card"] * 1) + ["obliterate"] + ["multi_slash", "sweep"]+["forbidden_pact"]
+        initial_deck = \
+            (["slash"] * 2) + \
+            (["guard"] * 4) + \
+            ["fire_ball"] + \
+            ["expose_weakness"] + \
+            ["healing_light"] + \
+            ["draw_card"] + \
+            ["obliterate"] + \
+            ["multi_slash", "sweep"] + \
+            ["rain_of_knives"] + \
+            ["forbidden_pact"]
         self.deck: list[str] = list(initial_deck)
         self.hand: list[str] = []
         self.discard_pile: list[str] = []
@@ -50,3 +60,11 @@ class DeckManager:
                 self.exhaust_pile.append(card_id)
             else:
                 self.discard_pile.append(card_id)
+
+    def add_card_to_hand(self, card_id: str):
+        """指定されたカードを手札に加える"""
+        if len(self.hand) < 10: # 手札上限チェック
+            self.hand.append(card_id)
+        else:
+            # 手札が上限に達している場合は捨て札に送る
+            self.discard_pile.append(card_id)
