@@ -16,7 +16,7 @@ class GameController:
         self.clock = pygame.time.Clock()
 
         # ゲーム全体で共有するプレイヤーオブジェクトを生成
-        self.player = Character("勇者", max_hp=100, max_mp=3, attack_power=0, x=150, y=settings.SCREEN_HEIGHT // 2 - 100, character_type='player', max_sanity=100, image_path=None)
+        self.player = Character("勇者", max_hp=100, max_mp=3, attack_power=0, x=150, y=settings.SCREEN_HEIGHT // 2 - 100, character_type='player', max_sanity=100, image_path="src/res/player/player.png")
 
         self.game_state = "map"  # 初期状態をマップに
         
