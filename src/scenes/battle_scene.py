@@ -99,7 +99,7 @@ class BattleScene:
             enemy.defense_buff = 0
         if not self.game_over:
             self.player.decrement_status_effects() # プレイヤーのターン終了処理
-            self.player.process_turn_end_relic_effects() # プレイヤーのターン終了時のレリック効果を処理
+            self.player.process_turn_end_relic_effects(self.enemy_manager.enemies) # プレイヤーのターン終了時のレリック効果を処理
         self.deck_manager.discard_hand()
         self.hovered_card_index = None
         self.enemy_manager.turn_state = "start"

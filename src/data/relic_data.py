@@ -18,5 +18,14 @@ RELICS = {
             {"type": "take_damage_on_turn_start", "value": 5},
             {"type": "gain_defense_on_turn_end", "value": 10}
         ]
+    },
+    "poison_orb": {
+        "name": "毒のオーブ",
+        "description": "ターン終了時、敵全体に1ダメージを与え、毒を1付与する。",
+        "color": settings.GREEN,
+        "effects": [
+            {"type": "damage_all_enemies_on_turn_end", "value": 1},
+            {"type": "apply_poison_to_all_enemies_on_turn_end", "value": 1}
+        ]
     }
 }
