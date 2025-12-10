@@ -10,6 +10,7 @@ from .drawers.character_status_drawer import CharacterStatusDrawer
 from .drawers.player_command_drawer import PlayerCommandDrawer # 既存の行
 from .drawers.damage_indicator import DamageIndicator # インポートパスを修正
 from .drawers.relic_drawer import RelicDrawer
+from .drawers.deck_viewer_drawer import DeckViewerDrawer
 
 class BattleView:
     def __init__(self):
@@ -20,6 +21,7 @@ class BattleView:
         self.status_drawer = CharacterStatusDrawer(self.fonts)
         self.command_drawer = PlayerCommandDrawer(self.fonts)
         self.relic_drawer = RelicDrawer(self.fonts)
+        self.deck_viewer_drawer = DeckViewerDrawer(self.fonts)
         self.damage_animations = []
         self.last_known_hp = {}
 
@@ -41,6 +43,10 @@ class BattleView:
         }
 
     def draw(self, battle_state: BattleScene):
+        # BattleSceneに deck_viewer_drawer を設定（初回のみ）
+        if battle_state.deck_viewer_drawer is None:
+            battle_state.deck_viewer_drawer = self.deck_viewer_drawer
+        
         # 1. 常に戦闘シーンの基本要素（背景、キャラクターなど）を描画
         if battle_state.background_image:
             self.screen.blit(battle_state.background_image, (0, 0))
@@ -71,6 +77,10 @@ class BattleView:
         else:
             # 戦闘シーンがアクティブな場合
             self._draw_ui(battle_state)
+        
+        # 山札ビューが表示中の場合
+        if battle_state.showing_deck_viewer:
+            self.deck_viewer_drawer.draw(self.screen, battle_state.deck_manager.deck, battle_state.player)
         
         # 3. ダメージアニメーションを常に最前面に描画
         self._update_and_draw_animations()

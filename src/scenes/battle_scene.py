@@ -50,6 +50,9 @@ class BattleScene:
         self.targeted_enemy_index: int | None = None # 現在選択されている敵のインデックス
         self.reward_gold: int = 0 # 勝利時に獲得するゴールド
         self.turn_count: int = 0 # ターンカウンター
+        self.showing_deck_viewer: bool = False  # 山札ビュー表示フラグ
+        self.hovered_deck_card: tuple | None = None  # ホバーされている山札カード情報
+        self.deck_viewer_drawer = None  # BattleViewで初期化される
         
         # プレイヤーの戦闘開始時の状態リセット
         self.player.reset_for_battle(self.enemy_manager.enemies)

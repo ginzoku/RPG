@@ -24,7 +24,7 @@ ANIMATION_SETTINGS: dict[str, dict] = {
     },
     "enemy_attack_slide": {
         "duration": 0.2, # seconds
-        "distance": 50, # pixels
+        "distance": 20, # pixels
     },
     "enemy_shake": {
         "duration": 0.2, # seconds
@@ -32,7 +32,7 @@ ANIMATION_SETTINGS: dict[str, dict] = {
         "frequency_factor": 4, # for math.sin(progress * math.pi * frequency_factor)
     },
     "hit_slide": { # New setting for hit animation
-        "duration": 0.2, # seconds
+        "duration": 0.1, # seconds
         "distance": 20, # pixels
     }
 }
@@ -55,3 +55,4 @@ CYAN = (0, 255, 255)
 
 # 新しく追加
 DAMAGE_RED = (255, 80, 80)
+BUTTON_COLOR = (255, 80, 80)
