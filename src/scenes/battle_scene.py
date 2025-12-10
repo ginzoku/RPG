@@ -69,14 +69,22 @@ class BattleScene:
         self.discovery_card_rects = rects
 
     def _check_game_over(self):
+        was_game_over = self.game_over # チェック前の状態を保存
+
         if all(not enemy.is_alive for enemy in self.enemy_manager.enemies):
-            self.reward_gold = sum(enemy.gold for enemy in self.enemy_manager.enemies)
-            self.player.gold += self.reward_gold
+            if not was_game_over: # ゲームオーバーになった瞬間のみ実行
+                self.reward_gold = sum(enemy.gold for enemy in self.enemy_manager.enemies)
+                self.player.gold += self.reward_gold
             self.game_over = True
             self.winner = "player"
+
         if not self.player.is_alive:
             self.game_over = True
             self.winner = "enemy"
+            
+        # ゲームオーバー状態に移行した瞬間に一度だけカードを削除する
+        if self.game_over and not was_game_over:
+            self.deck_manager.remove_temporary_cards()
 
     def _update_target_after_enemy_death(self):
         """

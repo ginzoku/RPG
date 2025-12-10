@@ -203,7 +203,7 @@ ACTIONS = {
         "rarity": "rare",
         "description": "0コスト4ダメージの「投げナイフ」を3枚手札に加える。",
         "effects": [
-            {"type": "add_card_to_hand", "target_scope": "self", "card_id": "throwing_knife", "amount": 3}
+            {"type": "add_card_to_hand", "target_scope": "self", "card_id": "throwing_knife", "amount": 3, "temporary": True}
         ]
     },
     "research": {

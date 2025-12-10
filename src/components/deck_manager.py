@@ -20,6 +20,7 @@ class DeckManager:
         self.hand: list[str] = []
         self.discard_pile: list[str] = []
         self.exhaust_pile: list[str] = []
+        self.temporary_cards = set() # 一時的なカードを記録
         random.shuffle(self.deck)
 
         # 発見メカニズム用の状態
@@ -37,8 +38,8 @@ class DeckManager:
         self.discovered_cards = []
 
     def add_discovered_card_to_hand(self, card_id: str):
-        """発見されたカードを手札に加える"""
-        self.add_card_to_hand(card_id)
+        """発見されたカードを手札に加え、一時的なカードとして記録する"""
+        self.add_card_to_hand(card_id, temporary=True)
         self.end_discovery()
 
 
@@ -103,10 +104,21 @@ class DeckManager:
             else:
                 self.discard_pile.append(card_id)
 
-    def add_card_to_hand(self, card_id: str):
+    def add_card_to_hand(self, card_id: str, temporary: bool = False):
         """指定されたカードを手札に加える"""
         if len(self.hand) < 10: # 手札上限チェック
             self.hand.append(card_id)
         else:
             # 手札が上限に達している場合は捨て札に送る
             self.discard_pile.append(card_id)
+
+        if temporary:
+            self.temporary_cards.add(card_id)
+
+    def remove_temporary_cards(self):
+        """戦闘終了時に一時的なカードを全てのデッキエリアから削除する"""
+        self.deck = [card for card in self.deck if card not in self.temporary_cards]
+        self.hand = [card for card in self.hand if card not in self.temporary_cards]
+        self.discard_pile = [card for card in self.discard_pile if card not in self.temporary_cards]
+        self.temporary_cards.clear()
+        print("DEBUG: Temporary cards have been removed from all piles.")

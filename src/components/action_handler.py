@@ -90,8 +90,9 @@ class ActionHandler:
         elif effect_type == "add_card_to_hand" and deck_manager:
             card_id = effect["card_id"]
             amount = effect.get("amount", 1)
+            is_temporary = effect.get("temporary", False) # temporaryフラグを取得
             for _ in range(amount):
-                deck_manager.add_card_to_hand(card_id)
+                deck_manager.add_card_to_hand(card_id, temporary=is_temporary)
         
         elif effect_type == "sanity_damage":
             target_character.take_sanity_damage(effect.get("power", 0))
