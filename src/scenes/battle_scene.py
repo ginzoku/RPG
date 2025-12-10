@@ -117,6 +117,11 @@ class BattleScene:
         if not self.game_over:
             self.player.decrement_status_effects() # プレイヤーのターン終了処理
             self.player.process_turn_end_relic_effects(self.enemy_manager.enemies) # プレイヤーのターン終了時のレリック効果を処理
+            # 手札にあるカードのターン終了時効果を適用（例: 灼熱の呪い）
+            try:
+                self.deck_manager.apply_hand_end_of_turn_effects(self.player)
+            except Exception as e:
+                print(f"ERROR: apply_hand_end_of_turn_effects failed: {e}")
         self.deck_manager.discard_hand()
         self.hovered_card_index = None
         self.enemy_manager.turn_state = "start"

@@ -100,15 +100,17 @@ class DeckViewerDrawer:
                 name_rect = name_text.get_rect(center=(card_rect.centerx, card_rect.centery - 30))
                 screen.blit(name_text, name_rect)
 
-                cost = card_data.get("cost", 0)
-                if cost >= 0:
-                    cost_circle_radius = 12
-                    cost_circle_center = (card_rect.left + cost_circle_radius + 6, card_rect.top + cost_circle_radius + 6)
-                    pygame.draw.circle(screen, settings.BLUE, cost_circle_center, cost_circle_radius)
-                    pygame.draw.circle(screen, settings.WHITE, cost_circle_center, cost_circle_radius, 1)
-                    cost_text = self.fonts["card"].render(str(cost), True, settings.WHITE)
-                    cost_text_rect = cost_text.get_rect(center=cost_circle_center)
-                    screen.blit(cost_text, cost_text_rect)
+                # 消費MPは unplayable 属性のカードでは表示しない
+                if not card_data.get("unplayable", False):
+                    cost = card_data.get("cost", 0)
+                    if cost >= 0:
+                        cost_circle_radius = 12
+                        cost_circle_center = (card_rect.left + cost_circle_radius + 6, card_rect.top + cost_circle_radius + 6)
+                        pygame.draw.circle(screen, settings.BLUE, cost_circle_center, cost_circle_radius)
+                        pygame.draw.circle(screen, settings.WHITE, cost_circle_center, cost_circle_radius, 1)
+                        cost_text = self.fonts["card"].render(str(cost), True, settings.WHITE)
+                        cost_text_rect = cost_text.get_rect(center=cost_circle_center)
+                        screen.blit(cost_text, cost_text_rect)
 
                 power = ActionHandler.get_card_display_power(player_for_power, card_id)
                 if power is not None:
@@ -198,9 +200,11 @@ class DeckViewerDrawer:
         name_rect = name_text.get_rect(center=(detail_x + detail_width // 2, detail_y + 28))
         screen.blit(name_text, name_rect)
 
-        cost = card_data.get("cost", 0)
-        cost_text = self.fonts["small"].render(f"コスト: {cost}", True, settings.WHITE)
-        screen.blit(cost_text, (detail_x + 20, detail_y + 64))
+        # 詳細表示のコストは unplayable 属性のカードでは表示しない
+        if not card_data.get("unplayable", False):
+            cost = card_data.get("cost", 0)
+            cost_text = self.fonts["small"].render(f"コスト: {cost}", True, settings.WHITE)
+            screen.blit(cost_text, (detail_x + 20, detail_y + 64))
 
         description = card_data.get("description", "説明なし")
         desc_lines = description.split("\n")

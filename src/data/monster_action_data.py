@@ -89,4 +89,13 @@ MONSTER_ACTIONS = {
             {"type": "conversation_event", "conversation_id": "monster_battle_intro_conversation"}
         ]
     }
+    ,
+    "inflict_hand_curse": {
+        "name": "灼熱の呪縛",
+        "intent_type": "debuff",
+        "message": "{monster_name}は灼熱の呪いを放った！",
+        "effects": [
+            {"type": "add_card_to_hand", "target_scope": "player", "card_id": "hand_burning_curse", "amount": 1, "temporary": True}
+        ]
+    }
 }

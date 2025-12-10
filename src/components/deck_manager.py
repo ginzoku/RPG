@@ -122,3 +122,38 @@ class DeckManager:
         self.discard_pile = [card for card in self.discard_pile if card not in self.temporary_cards]
         self.temporary_cards.clear()
         print("DEBUG: Temporary cards have been removed from all piles.")
+
+    def apply_hand_end_of_turn_effects(self, player):
+        """手札にあるカードの 'on_turn_end' 効果を適用する。
+
+        現状は 'damage' タイプをサポートし、
+        'target_scope' が 'player' の場合にプレイヤーへダメージを与える。
+        他の効果を追加したい場合はここに拡張してください。
+        """
+        # 手札をコピーして反復（処理中に手札を変更しても安全）
+        for card_id in list(self.hand):
+            action_data = ACTIONS.get(card_id, {})
+            on_end_effects = action_data.get("on_turn_end", [])
+            for effect in on_end_effects:
+                etype = effect.get("type")
+                if etype == "damage":
+                    tgt = effect.get("target_scope")
+                    power = effect.get("power", 0)
+                    if tgt == "player":
+                        # 直接ダメージを適用
+                        try:
+                            player.take_damage(power)
+                        except Exception:
+                            # 安全のため例外は無視せずログ出力
+                            print(f"ERROR: Failed to apply end-of-turn damage from {card_id}")
+                elif etype == "heal":
+                    tgt = effect.get("target_scope")
+                    power = effect.get("power", 0)
+                    if tgt == "player":
+                        try:
+                            player.heal(power)
+                        except Exception:
+                            print(f"ERROR: Failed to apply end-of-turn heal from {card_id}")
+                else:
+                    # 未対応のエフェクトは今は無視（将来の拡張ポイント）
+                    print(f"DEBUG: Unsupported on_turn_end effect type '{etype}' on card '{card_id}'")

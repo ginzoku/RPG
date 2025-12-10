@@ -25,15 +25,15 @@ class ActionHandler:
         return []
 
     @staticmethod
-    def execute_monster_action(monster: Character, targets: list[Character], action_id: str) -> list[str]:
+    def execute_monster_action(monster: Character, targets: list[Character], action_id: str, deck_manager=None) -> list[str]:
         action_data = MONSTER_ACTIONS[action_id]
         for effect in action_data.get("effects", []):
-            ActionHandler._process_effect(monster, targets, effect)
+            ActionHandler._process_effect(monster, targets, effect, deck_manager)
 
         return []
 
     @staticmethod
-    def _process_effect(source: Character, targets: list[Character], effect: dict, deck_manager: DeckManager | None = None):
+    def _process_effect(source: Character, targets: list[Character], effect: dict, deck_manager=None):
         effect_type = effect.get("type")
         if effect_type == "pass": return
 
@@ -48,7 +48,7 @@ class ActionHandler:
                 ActionHandler._apply_single_effect(source, target_character, effect, deck_manager)
 
     @staticmethod
-    def _apply_single_effect(source: Character, target_character: Character, effect: dict, deck_manager: DeckManager | None = None):
+    def _apply_single_effect(source: Character, target_character: Character, effect: dict, deck_manager=None):
         from ..components.monster import Monster
         effect_type = effect.get("type")
 

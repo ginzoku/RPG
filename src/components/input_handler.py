@@ -90,10 +90,8 @@ class InputHandler:
 
                 if card_rect.collidepoint(pos):
                     action_id = self.scene.deck_manager.hand[i]
-                    action = ACTIONS[action_id]
-                    can_afford = self.scene.player.current_mana >= action.get("cost", 0)
-                    if can_afford:
-                        self.scene.hovered_card_index = i
+                    # unplayable 属性があってもホバーは可能にする（グレー表示はしない）
+                    self.scene.hovered_card_index = i
                     return
 
     def _handle_mouse_click(self, pos: tuple[int, int]):
@@ -137,5 +135,17 @@ class InputHandler:
             card_rect = pygame.Rect(current_card_x, card_y, card_width, card_height)
 
             if card_rect.collidepoint(pos):
+                # クリック時は unplayable 属性を持つカードを無効化する
+                action_id = self.scene.deck_manager.hand[i]
+                action = ACTIONS.get(action_id, {})
+                if action.get("unplayable", False):
+                    # 使用不可カード: 何もしない（将来的にメッセージ表示等を追加可能）
+                    print(f"DEBUG: Tried to click unplayable card {action_id}")
+                    return
+                # マナが足りない場合は実行しない
+                if self.scene.player.current_mana < action.get("cost", 0):
+                    print(f"DEBUG: Not enough mana to play {action_id}")
+                    return
+
                 self.scene.execute_card_action(i)
                 return

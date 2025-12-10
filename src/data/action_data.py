@@ -216,4 +216,17 @@ ACTIONS = {
             {"type": "discover_card", "target_scope": "self", "rarity": "uncommon", "count": 3}
         ]
     }
+    ,
+    "hand_burning_curse": {
+        "card_id": "hand_burning_curse",
+        "name": "灼熱の呪い",
+        "cost": 0,
+        "rarity": "special",
+        "unplayable": True,
+        "temporary": True,
+        "description": "手札にあるとターン終了時に10ダメージを受ける。一時的で使用不可。",
+        "on_turn_end": [
+            {"type": "damage", "target_scope": "player", "power": 10}
+        ]
+    }
 }

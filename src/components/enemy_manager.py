@@ -72,22 +72,21 @@ class EnemyManager:
                 return log_messages
 
             if not enemy.is_animating:
-                # 行動の実行とアニメーション開始
+                # 行動の決定
                 action_id = enemy.next_action or enemy.choose_action()
                 action_data = MONSTER_ACTIONS.get(action_id, {})
                 effects = action_data.get("effects", [])
-
                 is_conversation = effects and effects[0].get("type") == "conversation_event"
 
                 # アニメーションタイプを決定
                 enemy.animation_type = "shake"  # デフォルトはシェイク
-                enemy.animation_duration = settings.ANIMATION_SETTINGS["enemy_shake"]["duration"] # Set default duration
+                enemy.animation_duration = settings.ANIMATION_SETTINGS["enemy_shake"]["duration"]
                 if not is_conversation:
                     intent_type = action_data.get("intent_type", "unknown")
                     if intent_type in ["attack", "attack_debuff"]:
                         enemy.animation_type = "attack"
-                        enemy.animation_duration = settings.ANIMATION_SETTINGS["enemy_attack_slide"]["duration"] # Set specific duration
-                
+                        enemy.animation_duration = settings.ANIMATION_SETTINGS["enemy_attack_slide"]["duration"]
+
                 # アニメーション開始
                 enemy.is_animating = True
                 enemy.animation_start_time = pygame.time.get_ticks()
@@ -96,8 +95,8 @@ class EnemyManager:
                     # 会話の場合は、IDを保持して実際のアクションは保留
                     enemy.pending_conversation_id = effects[0]["conversation_id"]
                 else:
-                    # 通常のアクションは即時実行
-                    ActionHandler.execute_monster_action(enemy, enemy.targets, action_id)
+                    # 通常のアクションは即時実行（DeckManagerを渡す）
+                    ActionHandler.execute_monster_action(enemy, enemy.targets, action_id, self.battle_scene.deck_manager)
             else:
                 # アニメーション更新
                 elapsed_time = pygame.time.get_ticks() - enemy.animation_start_time
