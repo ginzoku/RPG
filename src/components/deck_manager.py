@@ -14,12 +14,54 @@ class DeckManager:
             ["obliterate"] + \
             ["multi_slash", "sweep"] + \
             ["rain_of_knives"] + \
-            ["forbidden_pact"]
+            ["forbidden_pact"] + \
+            ["research"]
         self.deck: list[str] = list(initial_deck)
         self.hand: list[str] = []
         self.discard_pile: list[str] = []
         self.exhaust_pile: list[str] = []
         random.shuffle(self.deck)
+
+        # 発見メカニズム用の状態
+        self.is_discovering = False
+        self.discovered_cards: list[dict] = []
+
+    def start_discovery(self, cards: list[dict]):
+        """発見プロセスを開始する"""
+        self.is_discovering = True
+        self.discovered_cards = cards
+
+    def end_discovery(self):
+        """発見プロセスを終了する"""
+        self.is_discovering = False
+        self.discovered_cards = []
+
+    def add_discovered_card_to_hand(self, card_id: str):
+        """発見されたカードを手札に加える"""
+        self.add_card_to_hand(card_id)
+        self.end_discovery()
+
+
+    def discover_cards(self, rarity: str = "uncommon", count: int = 3) -> list[dict]:
+        """
+        指定されたレアリティのカードをデッキ外から発見し、指定された枚数だけランダムに返す。
+        """
+        # 指定されたレアリティのカードをすべて集める
+        cards_of_rarity = []
+        for card_id, card_data in ACTIONS.items():
+            if card_data.get("rarity") == rarity:
+                # 'id'フィールドを辞書に追加
+                card_info = card_data.copy()
+                card_info['id'] = card_id
+                cards_of_rarity.append(card_info)
+
+        # 見つかったカードが要求数より少ない場合は、見つかった分だけ返す
+        num_to_discover = min(count, len(cards_of_rarity))
+
+        # ランダムにカードを選んで返す
+        if num_to_discover > 0:
+            return random.sample(cards_of_rarity, num_to_discover)
+        return []
 
     def draw_cards(self, num_to_draw: int) -> bool:
         """

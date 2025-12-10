@@ -205,5 +205,15 @@ ACTIONS = {
         "effects": [
             {"type": "add_card_to_hand", "target_scope": "self", "card_id": "throwing_knife", "amount": 3}
         ]
+    },
+    "research": {
+        "card_id": "research",
+        "name": "調査",
+        "cost": 1,
+        "rarity": "uncommon",
+        "description": "アンコモンのカードを3枚発見し、そのうち1枚を手札に加える。",
+        "effects": [
+            {"type": "discover_card", "target_scope": "self", "rarity": "uncommon", "count": 3}
+        ]
     }
 }

@@ -53,6 +53,7 @@ class BattleScene:
         self.showing_deck_viewer: bool = False  # 山札ビュー表示フラグ
         self.hovered_deck_card: tuple | None = None  # ホバーされている山札カード情報
         self.deck_viewer_drawer = None  # BattleViewで初期化される
+        self.discovery_card_rects: list[tuple[pygame.Rect, str]] = [] # 発見カードのRectとID
         
         # プレイヤーの戦闘開始時の状態リセット
         self.player.reset_for_battle(self.enemy_manager.enemies)
@@ -62,6 +63,10 @@ class BattleScene:
         # バトル開始時に一番左の敵をデフォルトターゲットに設定
         first_living_enemy_index = next((i for i, e in enumerate(self.enemy_manager.enemies) if e.is_alive), None)
         self.targeted_enemy_index = first_living_enemy_index
+
+    def set_discovery_card_rects(self, rects: list[tuple[pygame.Rect, str]]):
+        """Viewから発見カードのRect情報を受け取る"""
+        self.discovery_card_rects = rects
 
     def _check_game_over(self):
         if all(not enemy.is_alive for enemy in self.enemy_manager.enemies):
@@ -147,6 +152,16 @@ class BattleScene:
 
     def process_input(self, event: pygame.event.Event):
         """入力処理をInputHandlerに委譲するか、現在のシーンに委譲する"""
+        if self.deck_manager and self.deck_manager.is_discovering:
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # 左クリック
+                    for rect, card_id in self.discovery_card_rects:
+                        if rect.collidepoint(event.pos):
+                            self.deck_manager.add_discovered_card_to_hand(card_id)
+                            self.discovery_card_rects = [] # 選択後はクリア
+                            break # 複数のカードを同時にクリックしないように
+            return # ディスカバリー中は他の入力を無視
+
         if self.current_scene == self: # バトルシーンがアクティブな場合
             self.input_handler.process_event(event)
         else: # 会話シーンがアクティブな場合

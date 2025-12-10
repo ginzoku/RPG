@@ -111,6 +111,15 @@ class ActionHandler:
             if effect_id and effect_id not in target_character.permanent_effects:
                 target_character.permanent_effects.append(effect_id)
 
+        elif effect_type == "discover_card" and deck_manager:
+            rarity = effect.get("rarity", "uncommon")
+            num_choices = effect.get("count", 3)
+            discovered_cards = deck_manager.discover_cards(rarity, num_choices)
+            print(f"DEBUG: Discovered cards: {discovered_cards}") # デバッグ用
+            if discovered_cards:
+                deck_manager.start_discovery(discovered_cards)
+
+
     @staticmethod
     def get_card_display_power(player: Character, action_id: str) -> int | None:
         """
