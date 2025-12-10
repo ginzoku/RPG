@@ -29,7 +29,8 @@ class MapScene:
             (5, 5, "goblin_duo"),
             (10, 8, "spider_duo"),
             (18, 10, "shadow_eye_solo"),
-            (10, 10, "conversation_test_group")
+            (10, 10, "conversation_test_group"),
+            (12, 6, "test_choice_group")
         ]
         self.enemies = [
             EnemySymbol(gx, gy, self.grid_size, group_id) for gx, gy, group_id in enemy_positions

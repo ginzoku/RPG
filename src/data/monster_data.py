@@ -50,4 +50,13 @@ MONSTERS = {
         "gold": 50,
         "image": "src/res/monster/test_monster.png"
     }
+    ,
+    "test_messenger": {
+        "name": "使者の亡霊",
+        "max_hp": 40,
+        "attack_power": 0,
+        "actions": ["trigger_test_choice_conversation", "wait"],
+        "gold": 0,
+        "image": "src/res/monster/test_monster.png"
+    }
 }

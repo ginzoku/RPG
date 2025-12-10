@@ -90,6 +90,15 @@ MONSTER_ACTIONS = {
         ]
     }
     ,
+    "trigger_test_choice_conversation": {
+        "name": "試験的対話の呼びかけ",
+        "intent_type": "conversation",
+        "message": "{monster_name}は何かを囁いた...",
+        "effects": [
+            {"type": "conversation_event", "conversation_id": "test_choice_conversation"}
+        ]
+    }
+    ,
     "inflict_hand_curse": {
         "name": "灼熱の呪縛",
         "intent_type": "debuff",

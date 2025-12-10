@@ -43,4 +43,34 @@ CONVERSATIONS = {
             {"speaker": "老人", "text": "準備は怠らんことじゃな。"},
         ]
     }
+    ,
+    "test_choice_conversation": {
+        "default_background": None,
+        "events": [
+            {
+                "speaker": "謎の声",
+                "text": "テスト文章",
+                "choices": [
+                    {
+                        "text": "選択肢A: 灼熱の呪縛を付与する攻撃",
+                        "effects": [
+                            {"type": "damage", "target_scope": "player", "power": 5, "hits": 1},
+                            {"type": "add_card_to_hand", "target_scope": "player", "card_id": "hand_burning_curse", "amount": 1, "temporary": True}
+                        ],
+                        "next_event_index": 1
+                    },
+                    {
+                        "text": "選択肢B: 正気度を減らしバリアを付与",
+                        "effects": [
+                            {"type": "apply_status", "target_scope": "player", "status_id": "weak", "turns": 1},
+                            {"type": "sanity_damage", "target_scope": "player", "power": 10}
+                        ],
+                        "next_event_index": 2
+                    }
+                ]
+            },
+            {"speaker": "謎の声", "text": "テスト文章A", "end": True},
+            {"speaker": "謎の声", "text": "テスト文章B"}
+        ]
+    }
 }

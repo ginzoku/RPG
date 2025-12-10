@@ -126,7 +126,8 @@ class EnemyManager:
 
                     if enemy.pending_conversation_id:
                         # 保留されていた会話を開始
-                        self.battle_scene.start_conversation(enemy.pending_conversation_id)
+                        # 会話は発生源の敵を伝えて開始する
+                        self.battle_scene.start_conversation(enemy.pending_conversation_id, source_enemy=enemy)
                         enemy.pending_conversation_id = None
                         # 次の敵へは進めない（会話から戻ってきたときに進む）
                     else:

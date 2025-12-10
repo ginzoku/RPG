@@ -60,4 +60,11 @@ ENEMY_GROUPS = {
         ],
         "background": "assets/backgrounds/forest_battle.png"
     }
+    ,
+    "test_choice_group": {
+        "enemies": [
+            {"id": "test_messenger", "pos_index": 0}
+        ],
+        "background": "assets/backgrounds/forest_battle.png"
+    }
 }

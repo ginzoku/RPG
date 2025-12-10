@@ -4,12 +4,19 @@ from ..data.conversation_data import CONVERSATIONS
 from ..views.conversation_view import ConversationView
 from ..components.character import Character
 from ..config import settings
+from ..components.action_handler import ActionHandler
+
+from typing import Optional
 
 class ConversationScene:
-    def __init__(self, player: Character, conversation_id: str, callback_on_finish):
+    def __init__(self, player: Character, conversation_id: str, callback_on_finish, battle_scene: Optional[object] = None, source_enemy: Optional[Character] = None):
         self.player = player
         self.conversation_id = conversation_id
         self.callback_on_finish = callback_on_finish
+        # battle_scene を受け取り、会話中に効果を即時適用するために使う
+        self.battle_scene = battle_scene
+        # 会話発生元の敵（あれば）
+        self.source_enemy = source_enemy
         self.conversation_data = CONVERSATIONS.get(conversation_id)
         if not self.conversation_data:
             raise ValueError(f"Conversation ID '{conversation_id}' not found in CONVERSATIONS.")
@@ -61,8 +68,30 @@ class ConversationScene:
 
     def _process_choice(self):
         selected_choice = self.current_choices[self.selected_choice_index]
-        self.result_effects = {"effects": selected_choice.get("effects", [])}
-        
+        # 選択肢の効果を即時に適用する
+        effects = selected_choice.get("effects", [])
+        if effects and self.battle_scene:
+            # 各エフェクトを解析して適切なターゲットに適用
+            for effect in effects:
+                target_scope = effect.get("target_scope")
+                # resolve targets
+                if target_scope == "player":
+                    targets = [self.player]
+                elif target_scope == "self":
+                    targets = [self.source_enemy] if self.source_enemy else [self.player]
+                elif target_scope == "all":
+                    # all -> include player + living enemies
+                    targets = [self.player] + [e for e in self.battle_scene.enemy_manager.enemies if getattr(e, "is_alive", True)]
+                else:
+                    targets = [self.player]
+
+                source = self.source_enemy or self.player
+                # Call internal processor; pass deck_manager when available
+                ActionHandler._process_effect(source, targets, effect, getattr(self.battle_scene, 'deck_manager', None))
+
+        # 保存用の戻り値もセットしておく（互換性のため）
+        self.result_effects = {"effects": effects}
+
         # 選択肢にnext_event_indexが指定されていればそこにジャンプ
         if "next_event_index" in selected_choice:
             self.current_event_index = selected_choice["next_event_index"]
@@ -75,6 +104,12 @@ class ConversationScene:
             self._finish_conversation()
 
     def _go_to_next_event(self):
+        # 現在表示中のイベントが 'end' とマークされていれば、次に進まず会話を終了する
+        current_event = self.conversation_data["events"][self.current_event_index]
+        if current_event.get("end", False):
+            self._finish_conversation()
+            return
+
         self.current_event_index += 1
         if self.current_event_index < len(self.conversation_data["events"]):
             self._show_current_event()

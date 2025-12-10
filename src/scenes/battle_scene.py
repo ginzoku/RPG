@@ -13,6 +13,7 @@ from ..data.monster_action_data import MONSTER_ACTIONS
 from ..data.relic_data import RELICS
 from ..data.enemy_group_data import ENEMY_GROUPS, ENEMY_POSITIONS
 from ..scenes.conversation_scene import ConversationScene
+from typing import Optional
 from ..config import settings
 
 class BattleScene:
@@ -221,8 +222,9 @@ class BattleScene:
                 self.deck_manager.draw_cards(5)
                 self.player.fully_recover_mana()
 
-    def start_conversation(self, conversation_id: str):
-        self.current_scene = ConversationScene(self.player, conversation_id, self.return_from_conversation)
+    def start_conversation(self, conversation_id: str, source_enemy: Optional[Character] = None):
+        # 会話を開始するときは BattleScene 自身と会話発生元の敵を ConversationScene に渡す
+        self.current_scene = ConversationScene(self.player, conversation_id, self.return_from_conversation, battle_scene=self, source_enemy=source_enemy)
 
     def return_from_conversation(self, result: dict | None = None):
         """会話シーンから戻ってきた際に呼び出されるコールバック"""
