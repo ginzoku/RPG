@@ -39,13 +39,12 @@ STATUS_EFFECTS = {
     "barrier": {
         "name": "バリア",
         "icon": "B",
-        "type": "defense_buff",
-        "value": 10,
+        "type": "damage_immunity",
         "color": settings.CYAN,
         "is_debuff": False,
-        "turns": -1,
+        "turns": 1,
         "removal_condition": "on_damage_taken",
-        "description": "防御力を10得る。ダメージを受けると解除される。"
+        "description": "受けるダメージを一度だけ無効化する。"
     },
     "focus": {
         "name": "集中",

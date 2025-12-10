@@ -27,19 +27,10 @@ class StatusEffectProcessor:
         # 状態異常を付与（効果は加算）
         character.status_effects[status_id] = character.status_effects.get(status_id, 0) + turns
 
-        # 防御バフ効果を適用
-        if new_status_data.get("type") == "defense_buff":
-            character.defense_buff += new_status_data.get("value", 0)
-
     @staticmethod
     def _remove_status(character: Character, status_id: str):
         """状態異常を解除し、関連する効果も元に戻す"""
         if status_id in character.status_effects:
-            status_data = STATUS_EFFECTS.get(status_id, {})
-            # 防御バフ効果を解除
-            if status_data.get("type") == "defense_buff":
-                character.defense_buff = max(0, character.defense_buff - status_data.get("value", 0))
-            
             del character.status_effects[status_id]
 
     @staticmethod
@@ -88,11 +79,20 @@ class StatusEffectProcessor:
 
     @staticmethod
     def modify_incoming_damage(character: Character, damage: int) -> int:
-        """被ダメージを修飾する（無防備など）"""
+        """被ダメージを修飾する（無防備、バリアなど）"""
         modified_damage = damage
+
+        # バリア効果の処理
+        if "barrier" in character.status_effects:
+            # ダメージを無効化し、バリアを解除
+            StatusEffectProcessor._remove_status(character, "barrier")
+            return 0 # ダメージを0にして即時リターン
+
+        # 無防備効果の処理
         if "vulnerable" in character.status_effects:
             modifier = STATUS_EFFECTS["vulnerable"]["value"]
             modified_damage = math.ceil(modified_damage * modifier)
+        
         return modified_damage
 
     @staticmethod
