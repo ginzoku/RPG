@@ -149,6 +149,21 @@ class InputHandler:
             card_rect = pygame.Rect(current_card_x, card_y, card_width, card_height)
 
             if card_rect.collidepoint(pos):
+                # If we're awaiting an exhaust choice (after discard choose), resolve it first
+                if hasattr(self.scene.deck_manager, 'awaiting_exhaust_choice') and self.scene.deck_manager.awaiting_exhaust_choice:
+                    resolved = self.scene.deck_manager.resolve_exhaust_choice(i)
+                    if not resolved:
+                        print('DEBUG: exhaust choice resolution failed')
+                    return
+
+                # If we're awaiting a discard choice (from an effect), resolve it here
+                if hasattr(self.scene.deck_manager, 'awaiting_discard_choice') and self.scene.deck_manager.awaiting_discard_choice:
+                    # resolve selection (InputHandler receives index i)
+                    resolved = self.scene.deck_manager.resolve_discard_choice(i)
+                    if not resolved:
+                        print('DEBUG: discard choice resolution failed')
+                    return
+
                 # クリック時は unplayable 属性を持つカードを無効化する
                 action_id = self.scene.deck_manager.hand[i]
                 action = ACTIONS.get(action_id, {})
@@ -158,7 +173,11 @@ class InputHandler:
                     return
                 # マナが足りない場合は実行しない
                 if self.scene.player.current_mana < action.get("cost", 0):
-                    print(f"DEBUG: Not enough mana to play {action_id}")
+                    # 画面上にメッセージを出す（BattleScene.show_message を使う）
+                    if hasattr(self.scene, 'show_message'):
+                        self.scene.show_message("マナが足りない！", duration=1.2)
+                    else:
+                        print(f"DEBUG: Not enough mana to play {action_id}")
                     return
 
                 self.scene.execute_card_action(i)

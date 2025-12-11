@@ -15,7 +15,9 @@ class DeckManager:
             ["multi_slash", "sweep"] + \
             ["rain_of_knives"] + \
             ["forbidden_pact"] + \
-            ["research"]
+            ["research"] + \
+            ["discard_and_random_exhaust"] + \
+            ["transmute_deck"]
         self.deck: list[str] = list(initial_deck)
         self.hand: list[str] = []
         self.discard_pile: list[str] = []
@@ -26,6 +28,17 @@ class DeckManager:
         # 発見メカニズム用の状態
         self.is_discovering = False
         self.discovered_cards: list[dict] = []
+        # デッキ内カードの一時変換ルール: {original_id: new_id}
+        self.deck_transform_rules: dict[str, str] = {}
+        # 選択系モード: 手札から1枚選んで捨て、その後ランダムで1枚を廃棄する処理用
+        # 選択系モードの状態
+        self.awaiting_discard_choice: bool = False
+        self._discard_config: dict | None = None
+        self._discard_selected_indices: list[int] = []
+        self.awaiting_exhaust_choice: bool = False
+        self._exhaust_selected_indices: list[int] = []
+        self._awaiting_exhaust_count: int = 0
+        self._choice_callback = None
 
     def start_discovery(self, cards: list[dict]):
         """発見プロセスを開始する"""
@@ -81,6 +94,7 @@ class DeckManager:
                 random.shuffle(self.deck)
             
             drawn_card = self.deck.pop()
+            # 戦闘中の表示は変換後IDを使うが、内部的には常に元のカードIDを保持する
             if len(self.hand) < 10: # 手札上限チェック
                 self.hand.append(drawn_card)
                 drew_any = True
@@ -98,7 +112,9 @@ class DeckManager:
         """使用したカードを手札から適切な場所に移動する（捨て札 or 廃棄）"""
         if 0 <= card_index < len(self.hand):
             card_id = self.hand.pop(card_index)
-            action_data = ACTIONS.get(card_id)
+            # 変換ルールがある場合、効果は変換先のデータに従うが、保存するIDは元のままにする
+            effective_id = self.get_effective_card_id(card_id)
+            action_data = ACTIONS.get(effective_id)
             if action_data and action_data.get("exhaust", False):
                 self.exhaust_pile.append(card_id)
             else:
@@ -115,6 +131,146 @@ class DeckManager:
         if temporary:
             self.temporary_cards.add(card_id)
 
+    def start_discard_choice(self, config: dict, callback=None):
+        """Start a select-and-dispose flow.
+
+        config example:
+          {"discard": {"mode":"choose"|"random", "count":1},
+           "exhaust": {"mode":"choose"|"random", "count":1}}
+        """
+        # normalize config
+        self._discard_config = config or {}
+        self._discard_selected_indices = []
+        self._exhaust_selected_indices = []
+        self._awaiting_exhaust_count = 0
+        self._choice_callback = callback
+
+        discard_cfg = self._discard_config.get("discard", {})
+        dmode = discard_cfg.get("mode", "choose")
+        dcount = int(discard_cfg.get("count", 1))
+
+        # If discard mode is random, immediately perform random discards
+        if dmode == "random":
+            import random
+            for _ in range(min(dcount, len(self.hand))):
+                idx = random.randrange(len(self.hand))
+                card = self.hand.pop(idx)
+                self.discard_pile.append(card)
+            # after random discard, proceed to exhaust handling
+            self._start_exhaust_phase()
+            return
+
+        # Otherwise enter interactive choose mode
+        self.awaiting_discard_choice = True
+
+    def resolve_discard_choice(self, hand_index: int):
+        """Handle a player's click during discard-choose mode. Accumulate selections until count reached."""
+        try:
+            if not self.awaiting_discard_choice:
+                return False
+            if not (0 <= hand_index < len(self.hand)):
+                return False
+
+            # prevent duplicate selection of the same current index
+            if hand_index in self._discard_selected_indices:
+                return False
+
+            self._discard_selected_indices.append(hand_index)
+
+            # if selected enough, perform discard of selected indices
+            dcount = int(self._discard_config.get("discard", {}).get("count", 1))
+            if len(self._discard_selected_indices) >= dcount:
+                # remove selected indices from hand in descending order
+                for idx in sorted(self._discard_selected_indices, reverse=True):
+                    if 0 <= idx < len(self.hand):
+                        card = self.hand.pop(idx)
+                        self.discard_pile.append(card)
+
+                # clear discard selection state
+                self.awaiting_discard_choice = False
+                self._discard_selected_indices = []
+
+                # proceed to exhaust phase
+                self._start_exhaust_phase()
+
+            return True
+        except Exception:
+            self.awaiting_discard_choice = False
+            self._discard_selected_indices = []
+            return False
+
+    def _start_exhaust_phase(self):
+        """Internal: start exhaust phase according to config (random or choose)."""
+        exhaust_cfg = self._discard_config.get("exhaust", {})
+        emode = exhaust_cfg.get("mode", "random")
+        ecount = int(exhaust_cfg.get("count", 0))
+
+        if ecount <= 0:
+            # nothing to do, finish
+            cb = self._choice_callback
+            self._choice_callback = None
+            if cb:
+                try:
+                    cb()
+                except Exception:
+                    pass
+            return
+
+        if emode == "random":
+            import random
+            for _ in range(min(ecount, len(self.hand))):
+                idx = random.randrange(len(self.hand))
+                card = self.hand.pop(idx)
+                self.exhaust_pile.append(card)
+            # finish
+            cb = self._choice_callback
+            self._choice_callback = None
+            if cb:
+                try:
+                    cb()
+                except Exception:
+                    pass
+            return
+
+        # emode == 'choose'
+        self.awaiting_exhaust_choice = True
+        self._exhaust_selected_indices = []
+        self._awaiting_exhaust_count = ecount
+
+    def resolve_exhaust_choice(self, hand_index: int):
+        """Handle player's selection during exhaust-choose phase."""
+        try:
+            if not self.awaiting_exhaust_choice:
+                return False
+            if not (0 <= hand_index < len(self.hand)):
+                return False
+            if hand_index in self._exhaust_selected_indices:
+                return False
+
+            self._exhaust_selected_indices.append(hand_index)
+            if len(self._exhaust_selected_indices) >= self._awaiting_exhaust_count:
+                for idx in sorted(self._exhaust_selected_indices, reverse=True):
+                    if 0 <= idx < len(self.hand):
+                        card = self.hand.pop(idx)
+                        self.exhaust_pile.append(card)
+                # finish
+                self.awaiting_exhaust_choice = False
+                self._exhaust_selected_indices = []
+                self._awaiting_exhaust_count = 0
+                cb = self._choice_callback
+                self._choice_callback = None
+                if cb:
+                    try:
+                        cb()
+                    except Exception:
+                        pass
+            return True
+        except Exception:
+            self.awaiting_exhaust_choice = False
+            self._exhaust_selected_indices = []
+            self._awaiting_exhaust_count = 0
+            return False
+
     def remove_temporary_cards(self):
         """戦闘終了時に一時的なカードを全てのデッキエリアから削除する"""
         self.deck = [card for card in self.deck if card not in self.temporary_cards]
@@ -122,7 +278,34 @@ class DeckManager:
         self.discard_pile = [card for card in self.discard_pile if card not in self.temporary_cards]
         self.temporary_cards.clear()
         print("DEBUG: Temporary cards have been removed from all piles.")
+        # 戦闘終了時にはデッキ変換ルールもクリアして元に戻す
+        self.clear_deck_transformations()
 
+    def apply_deck_transformation_rules(self, mappings: list[dict]):
+        """Apply transformation rules to the deck for the rest of the battle.
+
+        mappings: list of {"from": original_id, "to": new_id}
+        The rule affects current deck content (for display) and future draws.
+        """
+        for m in mappings:
+            frm = m.get("from")
+            to = m.get("to")
+            if not frm or not to:
+                continue
+            # 登録
+            self.deck_transform_rules[frm] = to
+
+    def get_effective_card_id(self, card_id: str) -> str:
+        """Return transformed card id if a rule exists, otherwise original id."""
+        return self.deck_transform_rules.get(card_id, card_id)
+
+    def get_effective_deck(self) -> list[str]:
+        """Return a view of the deck with transformations applied for display."""
+        return [self.get_effective_card_id(c) for c in self.deck]
+
+    def clear_deck_transformations(self):
+        """Clear any active deck transformation rules."""
+        self.deck_transform_rules.clear()
     def apply_hand_end_of_turn_effects(self, player):
         """手札にあるカードの 'on_turn_end' 効果を適用する。
 

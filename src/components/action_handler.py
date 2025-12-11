@@ -41,8 +41,15 @@ class ActionHandler:
 
         for _ in range(hits):
             # 毎ヒットごとにターゲットが生きているか確認
+            # targets が空の場合でも（例: discover_card, transform_deck 等の非ターゲット効果）
+            # 効果を実行するために source をダミーターゲットとして1回処理する
+            if not targets:
+                ActionHandler._apply_single_effect(source, source, effect, deck_manager)
+                continue
+
             alive_targets = [t for t in targets if t.is_alive]
-            if not alive_targets: break
+            if not alive_targets:
+                break
 
             for target_character in alive_targets:
                 ActionHandler._apply_single_effect(source, target_character, effect, deck_manager)
@@ -119,6 +126,22 @@ class ActionHandler:
             print(f"DEBUG: Discovered cards: {discovered_cards}") # デバッグ用
             if discovered_cards:
                 deck_manager.start_discovery(discovered_cards)
+
+        elif effect_type == "transform_deck" and deck_manager:
+            # mappings: list of {from: original_id, to: new_id}
+            mappings = effect.get("mappings", [])
+            deck_manager.apply_deck_transformation_rules(mappings)
+        
+        elif effect_type == "select_and_dispose" and deck_manager:
+            # effect contains 'discard' and 'exhaust' sub-configs
+            config = {
+                'discard': effect.get('discard', {}),
+                'exhaust': effect.get('exhaust', {})
+            }
+            try:
+                deck_manager.start_discard_choice(config)
+            except Exception:
+                pass
 
 
     @staticmethod

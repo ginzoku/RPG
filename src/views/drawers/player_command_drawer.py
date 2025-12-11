@@ -16,7 +16,14 @@ class PlayerCommandDrawer:
         cards = battle_state.deck_manager.hand
         num_commands = len(cards)
         if num_commands == 0:
+            # Ensure hovered index is cleared when no cards
+            battle_state.hovered_card_index = None
             return
+
+        # Validate hovered index to avoid stale/out-of-range values
+        if battle_state.hovered_card_index is not None:
+            if not (0 <= battle_state.hovered_card_index < num_commands):
+                battle_state.hovered_card_index = None
 
         # --- カードサイズの相対的な定義 ---
         card_height = int(command_area_rect.height * 0.95)
@@ -27,6 +34,32 @@ class PlayerCommandDrawer:
         total_width = (num_commands - 1) * overlap_x + card_width
         start_x = (screen.get_width() - total_width) / 2
         card_y = screen.get_height() - card_height - int(command_area_rect.height * 0.05)
+
+        # 選択モード時のヘッダ表示
+        header_text = None
+        dm = getattr(battle_state, 'deck_manager', None)
+        if dm is not None:
+            cfg = getattr(dm, '_discard_config', None)
+            if getattr(dm, 'awaiting_discard_choice', False):
+                dcfg = (cfg or {}).get('discard', {})
+                cnt = int(dcfg.get('count', 1))
+                header_text = f"手札から {cnt} 枚を選んで捨ててください"
+            elif getattr(dm, 'awaiting_exhaust_choice', False):
+                ecfg = (cfg or {}).get('exhaust', {})
+                cnt = int(ecfg.get('count', 1))
+                header_text = f"手札から {cnt} 枚を選んで廃棄してください"
+
+        if header_text:
+            header_surf = self.fonts['medium'].render(header_text, True, (255, 255, 255))
+            header_rect = header_surf.get_rect(center=(screen.get_width() // 2, command_area_rect.top - 28))
+            # 半透明の背景パネル
+            panel_rect = header_rect.inflate(20, 12)
+            panel = pygame.Surface(panel_rect.size)
+            panel.set_alpha(180)
+            panel.fill((20, 20, 30))
+            screen.blit(panel, panel_rect.topleft)
+            pygame.draw.rect(screen, (200, 200, 200), panel_rect, 1, border_radius=6)
+            screen.blit(header_surf, header_rect)
 
         # ホバーされていないカードを先に描画
         for i, action_id in enumerate(cards):
@@ -56,23 +89,23 @@ class PlayerCommandDrawer:
 
 
     def _draw_single_card(self, screen: pygame.Surface, battle_state: BattleScene, action_id: str, card_rect: pygame.Rect, card_index: int):
-        action = ACTIONS[action_id]
-        can_afford = battle_state.player.current_mana >= action.get("cost", 0)
+        # 表示は戦闘中の変換ルールを反映した effective_id を使う
+        effective_id = action_id
+        if hasattr(battle_state.deck_manager, 'get_effective_card_id'):
+            effective_id = battle_state.deck_manager.get_effective_card_id(action_id)
+        action = ACTIONS.get(effective_id, ACTIONS.get(action_id, {}))
+        # 見た目は常に通常カラーで表示（マナ不足時のグレーアウトを廃止）
+        card_bg_color, card_border_color, text_color = ((40, 40, 60), settings.WHITE, settings.LIGHT_BLUE)
 
-        if not can_afford:
-            card_bg_color, card_border_color, text_color = ((20, 20, 30), (80, 80, 80), settings.DARK_GRAY)
-        else:
-            card_bg_color, card_border_color, text_color = ((40, 40, 60), settings.WHITE, settings.LIGHT_BLUE)
-
-        # 廃棄カードの特別な表示
+        # 廃棄カードの特別な表示（effective_id の属性を参照）
         if action.get("exhaust", False):
             card_border_color = settings.YELLOW # 例えば黄色に
 
         pygame.draw.rect(screen, card_bg_color, card_rect, border_radius=5)
         pygame.draw.rect(screen, card_border_color, card_rect, 2, border_radius=5)
 
-        # アクション名
-        name_text = self.fonts["small"].render(action["name"], True, text_color)
+        # アクション名（表示は変換後の名前）
+        name_text = self.fonts["small"].render(action.get("name", action_id), True, text_color)
         name_rect = name_text.get_rect(center=card_rect.center)
         screen.blit(name_text, name_rect)
 
@@ -89,7 +122,8 @@ class PlayerCommandDrawer:
                 screen.blit(cost_text, cost_text_rect)
 
         # 右下: 威力または防御値の表示
-        power = ActionHandler.get_card_display_power(battle_state.player, action_id)
+        # 表示用の威力は effective_id で計算
+        power = ActionHandler.get_card_display_power(battle_state.player, effective_id)
         if power is not None:
             effect_type = action.get("effects", [{}])[0].get("type")
             hits = action.get("effects", [{}])[0].get("hits", 1)
@@ -115,7 +149,10 @@ class PlayerCommandDrawer:
         screen.blit(power_text, power_text_rect)
 
     def _draw_enlarged_card(self, screen: pygame.Surface, battle_state: BattleScene, action_id: str):
-        action = ACTIONS[action_id]
+        effective_id = action_id
+        if hasattr(battle_state.deck_manager, 'get_effective_card_id'):
+            effective_id = battle_state.deck_manager.get_effective_card_id(action_id)
+        action = ACTIONS.get(effective_id, ACTIONS.get(action_id, {}))
         
         # --- 拡大カードサイズの相対的な定義 ---
         card_height = int(screen.get_height() * 0.6)
@@ -136,7 +173,7 @@ class PlayerCommandDrawer:
         cost_area_right_edge = card_rect.left + (cost_circle_radius * 2) + 20
         name_area_center_x = cost_area_right_edge + (card_rect.right - cost_area_right_edge) / 2
 
-        name_text = self.fonts["small"].render(action["name"], True, settings.WHITE)
+        name_text = self.fonts["small"].render(action.get("name", action_id), True, settings.WHITE)
         name_rect = name_text.get_rect(centerx=name_area_center_x, y=card_rect.top + 20)
         screen.blit(name_text, name_rect)
 
@@ -159,7 +196,7 @@ class PlayerCommandDrawer:
                 screen.blit(cost_text, cost_text_rect)
 
         # 右下: 威力または防御値
-        power = ActionHandler.get_card_display_power(battle_state.player, action_id)
+        power = ActionHandler.get_card_display_power(battle_state.player, effective_id)
         if power is not None:
             effect_type = action.get("effects", [{}])[0].get("type")
             hits = action.get("effects", [{}])[0].get("hits", 1)

@@ -47,7 +47,8 @@ class Character:
 
         # プレイヤーの場合のみ初期レリックを適用
         if self.character_type == 'player':
-            self.relics = ["red_stone", "cursed_armor", "poison_orb", "shield_of_timing", "mana_exchange_amulet"] # 初期レリック
+            self.relics = ["red_stone"]
+                        #    , "cursed_armor", "poison_orb", "shield_of_timing", "mana_exchange_amulet"] # 初期レリック
             # レリックの効果はBattleScene.resetで適用されるため、ここでは呼び出さない
             # self._apply_relic_effects()
 

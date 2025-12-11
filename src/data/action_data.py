@@ -229,4 +229,38 @@ ACTIONS = {
             {"type": "damage", "target_scope": "player", "power": 10}
         ]
     }
+
+    ,
+    "transmute_deck": {
+        "card_id": "transmute_deck",
+        "name": "元素転換",
+        "cost": 2,
+        "rarity": "rare",
+        "description": "戦闘終了時まで、山札内の「斬りつけ」を「ファイア」に、" \
+                       "山札内の防御カードを「小ヒール」に変換する。",
+        "effects": [
+            {
+                "type": "transform_deck",
+                "mappings": [
+                    {"from": "slash", "to": "fire_ball"},
+                    {"from": "guard", "to": "heal_light"}
+                ]
+            }
+        ]
+    }
+    ,
+    "discard_and_random_exhaust": {
+        "card_id": "discard_and_random_exhaust",
+        "name": "賭けの処分",
+        "cost": 1,
+        "rarity": "uncommon",
+        "description": "手札を1枚選んで捨てる。さらに手札からランダムで1枚を廃棄する。",
+        "effects": [
+            {
+                "type": "select_and_dispose",
+                "discard": {"mode": "choose", "count": 1},
+                "exhaust": {"mode": "random", "count": 1}
+            }
+        ]
+    }
 }

@@ -67,6 +67,19 @@ class BattleScene:
         # バトル開始時に一番左の敵をデフォルトターゲットに設定
         first_living_enemy_index = next((i for i, e in enumerate(self.enemy_manager.enemies) if e.is_alive), None)
         self.targeted_enemy_index = first_living_enemy_index
+        # 短時間表示用メッセージ（例: マナが足りない！）
+        self.transient_message: str | None = None
+        self.transient_message_expire_at: int = 0  # pygame.time.get_ticks() ベースのミリ秒
+
+    def show_message(self, text: str, duration: float = 1.2):
+        """画面上に一時的に表示するメッセージをセットする（秒単位の継続時間）"""
+        try:
+            import pygame
+            now = pygame.time.get_ticks()
+        except Exception:
+            now = 0
+        self.transient_message = text
+        self.transient_message_expire_at = now + int(duration * 1000)
 
     def set_discovery_card_rects(self, rects: list[tuple[pygame.Rect, str]]):
         """Viewから発見カードのRect情報を受け取る"""
@@ -136,8 +149,10 @@ class BattleScene:
 
     def execute_card_action(self, card_index: int):
         """指定されたカードのアクションを実行する"""
+        # 内部的には元IDを保持するが、効果は変換ルールがあれば変換後IDで判定・実行する
         action_id = self.deck_manager.hand[card_index]
-        action = ACTIONS[action_id]
+        effective_action_id = self.deck_manager.get_effective_card_id(action_id)
+        action = ACTIONS.get(effective_action_id, {})
 
         targets = []
         # 最初の効果のtarget_scopeに基づいてターゲットを決定する
@@ -159,8 +174,10 @@ class BattleScene:
         # アクションを実行。ActionHandlerが各効果のターゲットを適切に処理する
         # 注意: ここでは最初の効果のターゲットリストを渡している。
         # 1アクションに複数のtarget_scopeが混在する場合は、ActionHandler側でのさらなる修正が必要。
-        ActionHandler.execute_player_action(self.player, targets, action_id, self.deck_manager)
+        # 実行には変換後のIDを渡す
+        ActionHandler.execute_player_action(self.player, targets, effective_action_id, self.deck_manager)
 
+        # 使用済みカードの移動は DeckManager 側で元IDを保持したまま処理する
         self.deck_manager.move_used_card(card_index)
         self.hovered_card_index = None # ホバー状態をリセット
         self._update_target_after_enemy_death()

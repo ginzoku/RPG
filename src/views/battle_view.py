@@ -82,11 +82,17 @@ class BattleView:
         
         # 山札ビューが表示中の場合
         if battle_state.showing_deck_viewer:
-            self.deck_viewer_drawer.draw(self.screen, battle_state.deck_manager.deck, battle_state.player, title="山札確認")
+            # デッキ変換ルールがある場合は変換後の表示を行う
+            effective_deck = battle_state.deck_manager.get_effective_deck()
+            self.deck_viewer_drawer.draw(self.screen, effective_deck, battle_state.player, title="山札確認")
 
         # 捨て札ビューが表示中の場合
         if getattr(battle_state, 'showing_discard_viewer', False):
-            self.deck_viewer_drawer.draw(self.screen, battle_state.deck_manager.discard_pile, battle_state.player, title="捨て札確認")
+            effective_discard = battle_state.deck_manager.get_effective_deck() if hasattr(battle_state.deck_manager, 'get_effective_deck') else battle_state.deck_manager.discard_pile
+            # get_effective_deck returns transformed view for the deck; for discard we need to map discard_pile as well
+            if hasattr(battle_state.deck_manager, 'get_effective_card_id'):
+                effective_discard = [battle_state.deck_manager.get_effective_card_id(cid) for cid in battle_state.deck_manager.discard_pile]
+            self.deck_viewer_drawer.draw(self.screen, effective_discard, battle_state.player, title="捨て札確認")
 
         # 発見カード選択画面が表示中の場合
         if battle_state.deck_manager and battle_state.deck_manager.is_discovering:
@@ -196,6 +202,28 @@ class BattleView:
         # プレイヤーのターンならコマンドを描画
         if battle_state.turn == "player" and not battle_state.game_over:
             self.command_drawer.draw(self.screen, battle_state, command_area_rect)
+        # 一時表示メッセージ（例: マナが足りない！）を描画
+        try:
+            import pygame as _pygame
+            now = _pygame.time.get_ticks()
+        except Exception:
+            now = 0
+
+        if getattr(battle_state, 'transient_message', None):
+            expire_at = getattr(battle_state, 'transient_message_expire_at', 0)
+            if now >= expire_at:
+                battle_state.transient_message = None
+            else:
+                msg = battle_state.transient_message
+                # 中央上寄せに半透明パネルで表示
+                surf = self.fonts['medium'].render(msg, True, settings.WHITE)
+                rect = surf.get_rect(center=(settings.SCREEN_WIDTH // 2, command_area_rect.top - 60))
+                panel = _pygame.Surface((rect.width + 20, rect.height + 12), _pygame.SRCALPHA)
+                panel.fill((20, 20, 30, 200))
+                panel_rect = panel.get_rect(center=rect.center)
+                self.screen.blit(panel, panel_rect.topleft)
+                pygame.draw.rect(self.screen, settings.WHITE, panel_rect, 1, border_radius=6)
+                self.screen.blit(surf, rect)
         
         if battle_state.game_over:
             if battle_state.winner == "player":
