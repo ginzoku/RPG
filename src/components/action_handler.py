@@ -13,14 +13,14 @@ from .status_effect_processor import StatusEffectProcessor
 
 class ActionHandler:
     @staticmethod
-    def execute_player_action(player: Character, targets: list[Character], action_id: str, deck_manager: DeckManager) -> list[str]:
+    def execute_player_action(player: Character, targets: list[Character], action_id: str, deck_manager: DeckManager, battle_scene=None) -> list[str]:
         action = ACTIONS[action_id]
 
         if not player.use_mana(action["cost"]):
             return [] # マナが足りない場合は何もせずに終了
 
         for effect in action.get("effects", []):
-            ActionHandler._process_effect(player, targets, effect, deck_manager)
+            ActionHandler._process_effect(player, targets, effect, deck_manager, battle_scene)
 
         return []
 
@@ -33,7 +33,7 @@ class ActionHandler:
         return []
 
     @staticmethod
-    def _process_effect(source: Character, targets: list[Character], effect: dict, deck_manager=None):
+    def _process_effect(source: Character, targets: list[Character], effect: dict, deck_manager=None, battle_scene=None):
         effect_type = effect.get("type")
         if effect_type == "pass": return
 
@@ -44,7 +44,7 @@ class ActionHandler:
             # targets が空の場合でも（例: discover_card, transform_deck 等の非ターゲット効果）
             # 効果を実行するために source をダミーターゲットとして1回処理する
             if not targets:
-                ActionHandler._apply_single_effect(source, source, effect, deck_manager)
+                ActionHandler._apply_single_effect(source, source, effect, deck_manager, battle_scene)
                 continue
 
             alive_targets = [t for t in targets if t.is_alive]
@@ -52,10 +52,10 @@ class ActionHandler:
                 break
 
             for target_character in alive_targets:
-                ActionHandler._apply_single_effect(source, target_character, effect, deck_manager)
+                ActionHandler._apply_single_effect(source, target_character, effect, deck_manager, battle_scene)
 
     @staticmethod
-    def _apply_single_effect(source: Character, target_character: Character, effect: dict, deck_manager=None):
+    def _apply_single_effect(source: Character, target_character: Character, effect: dict, deck_manager=None, battle_scene=None):
         from ..components.monster import Monster
         effect_type = effect.get("type")
 
@@ -140,6 +140,25 @@ class ActionHandler:
             }
             try:
                 deck_manager.start_discard_choice(config)
+            except Exception:
+                pass
+        elif effect_type == "change_unique":
+            # change the current unique on the battle scene (if provided)
+            if not battle_scene:
+                return
+            new_uid = effect.get('unique_id')
+            if not new_uid:
+                return
+            # set current unique on battle scene and reset its cooldown to 0
+            try:
+                # initialize unique_state for new_uid if missing
+                if not hasattr(battle_scene, 'unique_state'):
+                    battle_scene.unique_state = {}
+                # reset cooldown to 0 to allow immediate use after change
+                battle_scene.unique_state[new_uid] = 0
+                battle_scene.current_unique_id = new_uid
+                if hasattr(battle_scene, 'show_message'):
+                    battle_scene.show_message(f"特技を切替: {new_uid}", duration=1.2)
             except Exception:
                 pass
 

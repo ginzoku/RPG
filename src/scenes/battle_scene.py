@@ -11,6 +11,7 @@ from ..components.enemy_manager import EnemyManager
 from ..components.input_handler import InputHandler
 from ..data.monster_action_data import MONSTER_ACTIONS
 from ..data.relic_data import RELICS
+from ..data.unique_data import UNIQUE_ABILITIES
 from ..data.enemy_group_data import ENEMY_GROUPS, ENEMY_POSITIONS
 from ..scenes.conversation_scene import ConversationScene
 from typing import Optional
@@ -63,6 +64,12 @@ class BattleScene:
         self.player.reset_for_battle(self.enemy_manager.enemies)
         self.deck_manager = DeckManager()
         self.deck_manager.draw_cards(5)
+
+        # ユニーク（特技）状態の初期化: key -> remaining cooldown turns (0で使用可能)
+        self.unique_state: dict[str, int] = {uid: 0 for uid in UNIQUE_ABILITIES.keys()}
+        # 現在選択されているユニークID（初期値はDEFAULTまたは最初のユニーク）
+        from ..data.unique_data import DEFAULT_UNIQUE_ID
+        self.current_unique_id: str = DEFAULT_UNIQUE_ID
 
         # バトル開始時に一番左の敵をデフォルトターゲットに設定
         first_living_enemy_index = next((i for i, e in enumerate(self.enemy_manager.enemies) if e.is_alive), None)
@@ -142,6 +149,69 @@ class BattleScene:
         self.deck_manager.discard_hand()
         self.hovered_card_index = None
         self.enemy_manager.turn_state = "start"
+        # プレイヤーのターン終了時にユニークのクールダウンを減らす（ターン経過）
+        for uid in list(self.unique_state.keys()):
+            if self.unique_state.get(uid, 0) > 0:
+                self.unique_state[uid] = max(0, self.unique_state[uid] - 1)
+
+    def use_unique(self, unique_id: str) -> bool:
+        """指定したunique_idを発動する。成功したらTrueを返す。
+
+        - クールダウン中なら False を返しメッセージ表示を呼ぶことを想定。
+        - 発動は action_id に記載されたカード効果をActionHandlerで実行する。
+        """
+        from ..components.action_handler import ActionHandler
+        from ..data.unique_data import UNIQUE_ABILITIES
+
+        cfg = UNIQUE_ABILITIES.get(unique_id)
+        if not cfg:
+            return False
+
+        remaining = self.unique_state.get(unique_id, 0)
+        if remaining > 0:
+            # クールダウン中
+            if hasattr(self, 'show_message'):
+                self.show_message(f"クールダウン中: {remaining}ターン", duration=1.2)
+            return False
+
+        action_id = cfg.get('action_id')
+        if not action_id:
+            return False
+
+        # 効果のターゲット決定（簡易: first effect の target_scope に従う）
+        from ..data.action_data import ACTIONS
+        action = ACTIONS.get(action_id, {})
+        first_effect = action.get('effects', [{}])[0]
+        target_scope = first_effect.get('target_scope')
+        targets = []
+        if target_scope == 'self':
+            targets = [self.player]
+        elif target_scope == 'single':
+            if self.targeted_enemy_index is not None and self.enemy_manager.enemies[self.targeted_enemy_index].is_alive:
+                targets = [self.enemy_manager.enemies[self.targeted_enemy_index]]
+        elif target_scope == 'all':
+            targets = [enemy for enemy in self.enemy_manager.enemies if enemy.is_alive]
+
+        if not targets and target_scope not in ['self', None]:
+            # ターゲットが必要だが選択されていない
+            return False
+
+        # 実行（ActionHandler 内でマナ消費もされる）
+        ActionHandler.execute_player_action(self.player, targets, action_id, self.deck_manager, self)
+
+        # クールダウンをセット
+        cd = int(cfg.get('cooldown', 0))
+        if cd > 0:
+            self.unique_state[unique_id] = cd
+
+        # ターゲット更新・勝敗判定
+        try:
+            self._update_target_after_enemy_death()
+            self._check_game_over()
+        except Exception:
+            pass
+
+        return True
 
     def set_target(self, enemy_index: int):
         """指定されたインデックスの敵をターゲットに設定する"""
@@ -175,7 +245,7 @@ class BattleScene:
         # 注意: ここでは最初の効果のターゲットリストを渡している。
         # 1アクションに複数のtarget_scopeが混在する場合は、ActionHandler側でのさらなる修正が必要。
         # 実行には変換後のIDを渡す
-        ActionHandler.execute_player_action(self.player, targets, effective_action_id, self.deck_manager)
+        ActionHandler.execute_player_action(self.player, targets, effective_action_id, self.deck_manager, self)
 
         # 使用済みカードの移動は DeckManager 側で元IDを保持したまま処理する
         self.deck_manager.move_used_card(card_index)

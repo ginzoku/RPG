@@ -217,6 +217,17 @@ ACTIONS = {
         ]
     }
     ,
+    "attune_storm": {
+        "card_id": "attune_storm",
+        "name": "嵐への適合",
+        "cost": 1,
+        "rarity": "uncommon",
+        "description": "特技を「嵐の舞」へ切り替える。",
+        "effects": [
+            {"type": "change_unique", "unique_id": "unique_storm"}
+        ]
+    },
+
     "hand_burning_curse": {
         "card_id": "hand_burning_curse",
         "name": "灼熱の呪い",
@@ -263,4 +274,27 @@ ACTIONS = {
             }
         ]
     }
+    ,
+    "unique_blast": {
+    "card_id": "unique_blast",
+    "name": "天破の一撃",
+    "cost": 0,
+    "rarity": "unique",
+    "description": "敵全体に{power}の物理ダメージを与え、カードを{draw}枚引く。",
+    "effects": [
+        {"type": "damage", "target_scope": "all", "power": 10, "hits": 1},
+        {"type": "draw_card", "target_scope": "self", "power": 1}
+    ]
+    },
+    "unique_storm": {
+        "card_id": "unique_storm",
+        "name": "嵐の舞",
+        "cost": 0,
+        "rarity": "unique",
+        "description": "敵単体に{power}の物理ダメージを2回与え、カードを1枚引く。",
+        "effects": [
+            {"type": "damage", "target_scope": "single", "power": 6, "hits": 2},
+            {"type": "draw_card", "target_scope": "self", "power": 1}
+        ]
+    },
 }

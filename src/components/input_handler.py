@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 
 from ..config import settings
 from ..data.action_data import ACTIONS
+from .action_handler import ActionHandler
+from ..data.unique_data import DEFAULT_UNIQUE_ID
 
 if TYPE_CHECKING:
     from ..scenes.battle_scene import BattleScene
@@ -54,8 +56,10 @@ class InputHandler:
 
     def _handle_mouse_motion(self, pos: tuple[int, int]):
         """マウス移動イベントを処理し、ホバー状態を更新する"""
+        # clear hover flags
         self.scene.hovered_card_index = None
         self.scene.hovered_relic_index = None
+        self.scene.hovered_unique = False
         for enemy in self.scene.enemy_manager.enemies:
             enemy.is_targeted = False
 
@@ -77,6 +81,12 @@ class InputHandler:
                 if enemy_rect.collidepoint(pos):
                     enemy.is_targeted = True
                     return
+
+        # 山札上のユニークボタンのホバー判定
+        deck_top_btn = getattr(self.scene, 'deck_top_button_rect', None)
+        if deck_top_btn and deck_top_btn.collidepoint(pos):
+            self.scene.hovered_unique = True
+            return
 
         # カードのホバー判定
         num_commands = len(self.scene.deck_manager.hand)
@@ -103,6 +113,52 @@ class InputHandler:
         """マウスクリックイベントを処理し、シーンの状態を更新する"""
         # 山札のクリック判定（ゲーム画面の左下辺り）
         # Use BattleScene-provided indicator rects if available (set by BattleView)
+        # 先に山札上の丸ボタン領域をチェック（優先）
+        deck_top_btn = getattr(self.scene, 'deck_top_button_rect', None)
+        if deck_top_btn and deck_top_btn.collidepoint(pos):
+            # 現在選択されているユニーク（battle_scene.current_unique_id）を優先して発動
+            unique_id = getattr(self.scene, 'current_unique_id', DEFAULT_UNIQUE_ID)
+            # BattleScene に use_unique API を実装している前提
+            if hasattr(self.scene, 'use_unique'):
+                ok = self.scene.use_unique(unique_id)
+                if not ok:
+                    # use_unique 側で適切なメッセージを表示する
+                    pass
+            else:
+                # フォールバック: 直接斬りつけを実行（従来互換）
+                action_id = 'slash'
+                effective_id = action_id
+                if hasattr(self.scene.deck_manager, 'get_effective_card_id'):
+                    effective_id = self.scene.deck_manager.get_effective_card_id(action_id)
+                action = ACTIONS.get(effective_id, ACTIONS.get(action_id, {}))
+                cost = action.get('cost', 0)
+                if self.scene.player.current_mana < cost:
+                    if hasattr(self.scene, 'show_message'):
+                        self.scene.show_message('マナが足りない！', duration=1.2)
+                    else:
+                        print(f"DEBUG: Not enough mana for {action_id}")
+                    return
+                # determine targets and execute
+                first_effect = action.get('effects', [{}])[0]
+                target_scope = first_effect.get('target_scope')
+                targets = []
+                if target_scope == 'self':
+                    targets = [self.scene.player]
+                elif target_scope == 'single':
+                    if self.scene.targeted_enemy_index is not None and self.scene.enemy_manager.enemies[self.scene.targeted_enemy_index].is_alive:
+                        targets = [self.scene.enemy_manager.enemies[self.scene.targeted_enemy_index]]
+                elif target_scope == 'all':
+                    targets = [enemy for enemy in self.scene.enemy_manager.enemies if enemy.is_alive]
+                if not targets and target_scope not in ['self', None]:
+                    return
+                ActionHandler.execute_player_action(self.scene.player, targets, effective_id, self.scene.deck_manager, self.scene)
+                try:
+                    self.scene._update_target_after_enemy_death()
+                    self.scene._check_game_over()
+                except Exception:
+                    pass
+            return
+
         deck_rect = getattr(self.scene, 'deck_indicator_rect', None)
         discard_rect = getattr(self.scene, 'discard_indicator_rect', None)
         if deck_rect and deck_rect.collidepoint(pos):

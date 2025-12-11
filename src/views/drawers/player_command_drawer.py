@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 import pygame
 import math
+import os
+from ...data.unique_data import DEFAULT_UNIQUE_ID
 from ...scenes.battle_scene import BattleScene
 from ...config import settings
 from ...data.action_data import ACTIONS
+from ...data.unique_data import UNIQUE_ABILITIES
 from ...components.action_handler import ActionHandler
 from ...data.status_effect_data import STATUS_EFFECTS
 
@@ -243,3 +246,139 @@ class PlayerCommandDrawer:
             battle_state.deck_indicator_rect = deck_rect
         except Exception:
             pass
+        # --- 山札の上に丸いボタンを描画 ---
+        # 中央に画像を置き、丸の下に '1' を描く
+        circle_radius = 28
+        # 少し上に上げて、下の '1' が山札ボタンに被らないようにする
+        extra_raise = 22
+        circle_center = (deck_rect.centerx, deck_rect.top - 10 - circle_radius - extra_raise)
+        circle_rect = pygame.Rect(circle_center[0] - circle_radius, circle_center[1] - circle_radius,
+                                  circle_radius * 2, circle_radius * 2)
+
+        # 背景の円
+        pygame.draw.circle(screen, (60, 60, 90), circle_center, circle_radius)
+        pygame.draw.circle(screen, settings.WHITE, circle_center, circle_radius, 2)
+
+        # 中央に小さな画像を置く（存在すれば読み込む）
+        icon_surf = None
+        if not hasattr(self, '_cached_deck_top_icon_tried'):
+            self._cached_deck_top_icon = None
+            self._cached_deck_top_icon_tried = True
+            # 試しにプロジェクト内の既知のパスを確認する
+            possible_paths = [
+                os.path.join('assets', 'icons', 'deck_icon.png'),
+                os.path.join('assets', 'icons', 'card.png'),
+            ]
+            for p in possible_paths:
+                if os.path.exists(p):
+                    try:
+                        img = pygame.image.load(p).convert_alpha()
+                        self._cached_deck_top_icon = img
+                        break
+                    except Exception:
+                        self._cached_deck_top_icon = None
+        else:
+            self._cached_deck_top_icon = getattr(self, '_cached_deck_top_icon', None)
+
+        if getattr(self, '_cached_deck_top_icon', None):
+            # アイコンを円に合わせて縮小して描画
+            icon = self._cached_deck_top_icon
+            # マージンを少し残す
+            max_dim = int(circle_radius * 1.4)
+            iw, ih = icon.get_size()
+            scale = min(max_dim / iw, max_dim / ih, 1.0)
+            new_surf = pygame.transform.smoothscale(icon, (int(iw * scale), int(ih * scale)))
+            rect = new_surf.get_rect(center=circle_center)
+            screen.blit(new_surf, rect)
+        else:
+            # 代替: 円の中に小さな白丸を描画してアイコンの代替にする
+            inner_r = int(circle_radius * 0.5)
+            pygame.draw.circle(screen, settings.WHITE, circle_center, inner_r)
+
+        # 円の下にユニークのクールダウンを描画。0なら準備完了（'1' を表示）
+        remaining_cd = 0
+        unique_state = getattr(battle_state, 'unique_state', None)
+        if unique_state and isinstance(unique_state, dict):
+            remaining_cd = int(unique_state.get(DEFAULT_UNIQUE_ID, 0))
+
+        # 準備完了時（remaining_cd == 0）はラベルを表示しない
+        if remaining_cd > 0:
+            label_text = str(remaining_cd)
+            try:
+                color = settings.DARK_GRAY
+                text_surf = self.fonts['small'].render(label_text, True, color)
+            except Exception:
+                text_surf = pygame.font.Font(None, 20).render(label_text, True, settings.WHITE)
+            text_rect = text_surf.get_rect(center=(circle_center[0], circle_center[1] + circle_radius + 12))
+            # 被りチェック: テキストの下端が deck_rect.top - 6 を超えるならテキストを上に移動
+            if text_rect.bottom >= deck_rect.top - 6:
+                text_rect.top = deck_rect.top - 6 - text_rect.height
+                # さらに余裕を持たせて円も少し上げる
+                if circle_center[1] + circle_radius + 6 >= text_rect.bottom:
+                    circle_center = (circle_center[0], text_rect.top - circle_radius - 8)
+            screen.blit(text_surf, text_rect)
+
+        # クリック領域としても保存
+        try:
+            battle_state.deck_top_button_rect = circle_rect
+        except Exception:
+            pass
+
+        # ホバー時にユニークのカード詳細を表示
+        if getattr(battle_state, 'hovered_unique', False):
+            try:
+                cfg = UNIQUE_ABILITIES.get(DEFAULT_UNIQUE_ID, {})
+                action_id = cfg.get('action_id')
+                effective_id = action_id
+                if hasattr(battle_state, 'deck_manager') and hasattr(battle_state.deck_manager, 'get_effective_card_id'):
+                    effective_id = battle_state.deck_manager.get_effective_card_id(action_id)
+                action = ACTIONS.get(effective_id, ACTIONS.get(action_id, {}))
+
+                title = action.get('name', action_id)
+                cost = action.get('cost', 0)
+                description = action.get('description', '')
+                power = ActionHandler.get_card_display_power(battle_state.player, effective_id)
+
+                lines = []
+                lines.append(f"{title}  (消費: {cost})")
+                if power is not None:
+                    lines.append(f"威力: {power}")
+                if description:
+                    # 短い説明を一行に切り出す
+                    lines.append(description.splitlines()[0])
+
+                # パネルサイズ計算
+                padding = 8
+                max_w = 0
+                rendered = []
+                for i, ln in enumerate(lines):
+                    f = self.fonts['small'] if i > 0 else self.fonts['medium']
+                    surf = f.render(ln, True, settings.WHITE)
+                    rendered.append((surf, f))
+                    if surf.get_width() > max_w: max_w = surf.get_width()
+
+                panel_w = max_w + padding * 2
+                panel_h = sum(surf.get_height() for surf, _ in rendered) + padding * 2
+
+                # 表示位置: ボタンの右上に表示（画面外なら左に回避）
+                px = circle_center[0] + circle_radius + 12
+                py = circle_center[1] - panel_h // 2
+                if px + panel_w > screen.get_width():
+                    px = circle_center[0] - circle_radius - 12 - panel_w
+                if py < 8:
+                    py = 8
+
+                panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+                panel.fill((30, 30, 40, 220))
+                # 枠線
+                pygame.draw.rect(panel, settings.WHITE, panel.get_rect(), 1, border_radius=6)
+
+                # テキスト描画
+                y = padding
+                for surf, f in rendered:
+                    panel.blit(surf, (padding, y))
+                    y += surf.get_height()
+
+                screen.blit(panel, (px, py))
+            except Exception:
+                pass
