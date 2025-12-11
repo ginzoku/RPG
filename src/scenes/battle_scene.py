@@ -52,8 +52,11 @@ class BattleScene:
         self.reward_gold: int = 0 # 勝利時に獲得するゴールド
         self.turn_count: int = 0 # ターンカウンター
         self.showing_deck_viewer: bool = False  # 山札ビュー表示フラグ
+        self.showing_discard_viewer: bool = False  # 捨て札ビュー表示フラグ
         self.hovered_deck_card: tuple | None = None  # ホバーされている山札カード情報
         self.deck_viewer_drawer = None  # BattleViewで初期化される
+        self.deck_indicator_rect: pygame.Rect | None = None
+        self.discard_indicator_rect: pygame.Rect | None = None
         self.discovery_card_rects: list[tuple[pygame.Rect, str]] = [] # 発見カードのRectとID
         
         # プレイヤーの戦闘開始時の状態リセット

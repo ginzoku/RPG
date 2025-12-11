@@ -23,8 +23,10 @@ class DeckViewerDrawer:
         self.card_gap_y = 10
         self.viewport_height = 400
 
-    def draw(self, screen: pygame.Surface, deck_cards: list[str], player_for_power) -> pygame.Rect:
+    def draw(self, screen: pygame.Surface, deck_cards: list[str], player_for_power, title: str = "山札確認") -> pygame.Rect:
         deck_cards = deck_cards or []
+        # display cards in ID order regardless of current deck order
+        display_cards = sorted(list(deck_cards))
 
         overlay = pygame.Surface((settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT))
         overlay.set_alpha(180)
@@ -39,7 +41,7 @@ class DeckViewerDrawer:
         pygame.draw.rect(screen, (30, 30, 50), window_rect, border_radius=15)
         pygame.draw.rect(screen, settings.WHITE, window_rect, 3, border_radius=15)
 
-        title_text = self.fonts["medium"].render("山札確認", True, settings.YELLOW)
+        title_text = self.fonts["medium"].render(title, True, settings.YELLOW)
         screen.blit(title_text, (window_rect.left + 20, window_rect.top + 20))
 
         card_area_rect = pygame.Rect(window_rect.left + 20, window_rect.top + 60, window_rect.width - 40, window_rect.height - 120)
@@ -66,12 +68,12 @@ class DeckViewerDrawer:
 
         self.card_rects.clear()
 
-        if len(deck_cards) == 0:
+        if len(display_cards) == 0:
             no_text = self.fonts["medium"].render("山札がありません", True, settings.WHITE)
             no_rect = no_text.get_rect(center=card_area_rect.center)
             screen.blit(no_text, no_rect)
         else:
-            for i, card_id in enumerate(deck_cards):
+            for i, card_id in enumerate(display_cards):
                 card_data = ACTIONS.get(card_id, {})
                 row = i // self.cards_per_row
                 col = i % self.cards_per_row
@@ -139,20 +141,9 @@ class DeckViewerDrawer:
                 card_id, card_data, card_rect = hovered_card
                 self._draw_enlarged_card(screen, card_data, card_id, player_for_power, window_rect)
 
-        # close button
-        close_button_width = 100
-        close_button_height = 40
-        close_button_rect = pygame.Rect(0, 0, close_button_width, close_button_height)
-        close_button_rect.bottomright = (window_rect.right - 20, window_rect.bottom - 20)
-
-        pygame.draw.rect(screen, settings.BUTTON_COLOR, close_button_rect, border_radius=5)
-        pygame.draw.rect(screen, settings.WHITE, close_button_rect, 2, border_radius=5)
-
-        close_text = self.fonts["small"].render("閉じる", True, settings.WHITE)
-        close_text_rect = close_text.get_rect(center=close_button_rect.center)
-        screen.blit(close_text, close_text_rect)
-
-        return close_button_rect
+        # No explicit close button: viewer is closed by clicking anywhere (handled by InputHandler).
+        # Return nothing.
+        return None
 
     def _draw_scrollbar(self, screen: pygame.Surface, card_area_rect: pygame.Rect, total_cards: int, display_card_h: int, gap_x: int):
         scrollbar_width = 10

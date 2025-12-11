@@ -82,7 +82,11 @@ class BattleView:
         
         # 山札ビューが表示中の場合
         if battle_state.showing_deck_viewer:
-            self.deck_viewer_drawer.draw(self.screen, battle_state.deck_manager.deck, battle_state.player)
+            self.deck_viewer_drawer.draw(self.screen, battle_state.deck_manager.deck, battle_state.player, title="山札確認")
+
+        # 捨て札ビューが表示中の場合
+        if getattr(battle_state, 'showing_discard_viewer', False):
+            self.deck_viewer_drawer.draw(self.screen, battle_state.deck_manager.discard_pile, battle_state.player, title="捨て札確認")
 
         # 発見カード選択画面が表示中の場合
         if battle_state.deck_manager and battle_state.deck_manager.is_discovering:
@@ -179,16 +183,15 @@ class BattleView:
             deck_count = len(battle_state.deck_manager.deck) if battle_state.deck_manager else 0
             discard_count = len(battle_state.deck_manager.discard_pile) if battle_state.deck_manager else 0
             
-            deck_text = self.fonts["small"].render(f"山札: {deck_count}", True, settings.WHITE)
-            deck_pos_x = int(settings.SCREEN_WIDTH * 0.02)
-            deck_pos_y = settings.SCREEN_HEIGHT - int(settings.SCREEN_HEIGHT * 0.06)
-            self.screen.blit(deck_text, (deck_pos_x, deck_pos_y))
-
-            discard_text = self.fonts["small"].render(f"捨て札: {discard_count}", True, settings.WHITE)
-            discard_pos_x = settings.SCREEN_WIDTH - int(settings.SCREEN_WIDTH * 0.02)
-            discard_pos_y = settings.SCREEN_HEIGHT - int(settings.SCREEN_HEIGHT * 0.03)
-            discard_rect = discard_text.get_rect(right=discard_pos_x, bottom=discard_pos_y)
-            self.screen.blit(discard_text, discard_rect)
+            # Draw discard pile as a button-like indicator (right-bottom) and expose its rect.
+            btn_w, btn_h = 140, 44
+            discard_rect = pygame.Rect(settings.SCREEN_WIDTH - btn_w - 10, settings.SCREEN_HEIGHT - btn_h - 20, btn_w, btn_h)
+            pygame.draw.rect(self.screen, (50, 50, 70), discard_rect, border_radius=6)
+            pygame.draw.rect(self.screen, settings.WHITE, discard_rect, 2, border_radius=6)
+            label = self.fonts["small"].render("捨て札", True, (0, 0, 0))
+            label_rect = label.get_rect(center=discard_rect.center)
+            self.screen.blit(label, label_rect)
+            battle_state.discard_indicator_rect = discard_rect
 
         # プレイヤーのターンならコマンドを描画
         if battle_state.turn == "player" and not battle_state.game_over:

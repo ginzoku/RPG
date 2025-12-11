@@ -17,19 +17,24 @@ class InputHandler:
         """イベントを処理し、適切なハンドラに振り分ける"""
         if self.scene.game_over: return
 
-        # 山札ビュー表示中の場合
-        if self.scene.showing_deck_viewer:
+        # 山札／捨て札ビュー表示中の場合
+        if self.scene.showing_deck_viewer or getattr(self.scene, 'showing_discard_viewer', False):
             # DeckViewerDrawer がまだ BattleView によって割り当てられていない可能性があるため安全に参照する
             dv = getattr(self.scene, 'deck_viewer_drawer', None)
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # 左クリック
-                    self.scene.showing_deck_viewer = False  # 閉じる
+                    # 左クリックで表示を閉じる（どちらのビューも閉じる）
+                    self.scene.showing_deck_viewer = False
+                    if hasattr(self.scene, 'showing_discard_viewer'):
+                        self.scene.showing_discard_viewer = False
                 elif event.button == 4:  # マウスホイール上
                     if dv and hasattr(dv, 'update_scroll'):
-                        dv.update_scroll(self.scene.deck_manager.deck, -20)
+                        cards = self.scene.deck_manager.discard_pile if getattr(self.scene, 'showing_discard_viewer', False) else self.scene.deck_manager.deck
+                        dv.update_scroll(cards, -20)
                 elif event.button == 5:  # マウスホイール下
                     if dv and hasattr(dv, 'update_scroll'):
-                        dv.update_scroll(self.scene.deck_manager.deck, 20)
+                        cards = self.scene.deck_manager.discard_pile if getattr(self.scene, 'showing_discard_viewer', False) else self.scene.deck_manager.deck
+                        dv.update_scroll(cards, 20)
             elif event.type == pygame.MOUSEMOTION:
                 # ホバーカード情報を更新（DeckViewerDrawerで検出）
                 if dv and hasattr(dv, 'get_hovered_card'):
@@ -97,9 +102,18 @@ class InputHandler:
     def _handle_mouse_click(self, pos: tuple[int, int]):
         """マウスクリックイベントを処理し、シーンの状態を更新する"""
         # 山札のクリック判定（ゲーム画面の左下辺り）
-        deck_rect = pygame.Rect(10, settings.SCREEN_HEIGHT - 120, 150, 110)
-        if deck_rect.collidepoint(pos):
+        # Use BattleScene-provided indicator rects if available (set by BattleView)
+        deck_rect = getattr(self.scene, 'deck_indicator_rect', None)
+        discard_rect = getattr(self.scene, 'discard_indicator_rect', None)
+        if deck_rect and deck_rect.collidepoint(pos):
             self.scene.showing_deck_viewer = True
+            return
+        if discard_rect and discard_rect.collidepoint(pos):
+            # open discard viewer
+            if hasattr(self.scene, 'showing_discard_viewer'):
+                self.scene.showing_discard_viewer = True
+            else:
+                self.scene.showing_deck_viewer = True
             return
         
         # ターン終了ボタンのクリック判定

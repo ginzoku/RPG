@@ -189,30 +189,20 @@ class PlayerCommandDrawer:
     
     def _draw_deck_indicator(self, screen: pygame.Surface, battle_state: BattleScene):
         """山札インジケーターを描画"""
-        deck_rect = pygame.Rect(10, screen.get_height() - 120, 150, 110)
-        
-        # 背景
-        pygame.draw.rect(screen, (40, 40, 60), deck_rect, border_radius=5)
-        pygame.draw.rect(screen, settings.WHITE, deck_rect, 2, border_radius=5)
-        
-        # タイトル
-        title_text = self.fonts["small"].render("山札", True, settings.YELLOW)
-        title_rect = title_text.get_rect(topleft=(deck_rect.left + 10, deck_rect.top + 10))
-        screen.blit(title_text, title_rect)
-        
-        # カード枚数
-        deck_count = len(battle_state.deck_manager.deck)
-        hand_count = len(battle_state.deck_manager.hand)
-        
-        count_text = self.fonts["small"].render(f"山札: {deck_count}枚", True, settings.WHITE)
-        count_rect = count_text.get_rect(topleft=(deck_rect.left + 10, deck_rect.top + 35))
-        screen.blit(count_text, count_rect)
-        
-        hand_text = self.fonts["small"].render(f"手札: {hand_count}枚", True, settings.WHITE)
-        hand_rect = hand_text.get_rect(topleft=(deck_rect.left + 10, deck_rect.top + 60))
-        screen.blit(hand_text, hand_rect)
-        
-        # クリック可能なアイコン
-        click_text = self.fonts["card"].render("クリック", True, settings.LIGHT_BLUE)
-        click_rect = click_text.get_rect(topleft=(deck_rect.left + 10, deck_rect.top + 85))
-        screen.blit(click_text, click_rect)
+        # simple button-like indicator with only the label '山札'
+        btn_w, btn_h = 140, 44
+        deck_rect = pygame.Rect(10, screen.get_height() - btn_h - 20, btn_w, btn_h)
+
+        # button background and border
+        pygame.draw.rect(screen, (50, 50, 70), deck_rect, border_radius=6)
+        pygame.draw.rect(screen, settings.WHITE, deck_rect, 2, border_radius=6)
+
+        # centered label '山札' in black text on the button-like area
+        label = self.fonts["small"].render("山札", True, (0, 0, 0))
+        label_rect = label.get_rect(center=deck_rect.center)
+        screen.blit(label, label_rect)
+        # expose the clickable rect to the battle scene so input handling matches visual
+        try:
+            battle_state.deck_indicator_rect = deck_rect
+        except Exception:
+            pass
