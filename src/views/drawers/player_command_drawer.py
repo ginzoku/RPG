@@ -208,6 +208,109 @@ class PlayerCommandDrawer:
             power_circle_radius = int(card_width * 0.12)
             self._draw_power_circle(screen, power, card_rect, color, power_circle_radius, hits=hits)
 
+    def draw_enlarged_into_rect(self, screen: pygame.Surface, battle_state: BattleScene | None, action_id: str, card_rect: pygame.Rect, show_effect_summary: bool = True, show_cost_label: bool = True):
+        """Draw the enlarged card UI into the specified rect.
+
+        This reuses the same visual logic as `_draw_enlarged_card` but allows
+        drawing into an arbitrary rectangle (useful for reward screens).
+        """
+        # Determine effective id using battle_state's deck_manager if available
+        effective_id = action_id
+        if battle_state and hasattr(battle_state, 'deck_manager') and hasattr(battle_state.deck_manager, 'get_effective_card_id'):
+            effective_id = battle_state.deck_manager.get_effective_card_id(action_id)
+        action = ACTIONS.get(effective_id, ACTIONS.get(action_id, {}))
+
+        # background and border
+        pygame.draw.rect(screen, (60, 60, 80), card_rect, border_radius=10)
+        card_border_color = settings.WHITE
+        if action.get("exhaust", False):
+            card_border_color = settings.YELLOW
+        pygame.draw.rect(screen, card_border_color, card_rect, 3, border_radius=10)
+
+        # name area
+        name_text = self.fonts["small"].render(action.get("name", action_id), True, settings.WHITE)
+        name_rect = name_text.get_rect(centerx=card_rect.left + (card_rect.width * 0.5), y=card_rect.top + 20)
+        screen.blit(name_text, name_rect)
+
+        # Show cost as text near top-right for clarity (in addition to cost circle)
+        if show_cost_label and not action.get("unplayable", False):
+            cost = action.get("cost", 0)
+            try:
+                cost_label = self.fonts["small"].render(f"消費: {cost}", True, settings.LIGHT_BLUE)
+                cost_label_rect = cost_label.get_rect(topright=(card_rect.right - 12, card_rect.top + 12))
+                screen.blit(cost_label, cost_label_rect)
+            except Exception:
+                pass
+
+        # effect summary line (first effect) to make effect explicit on reward cards
+        effects = action.get("effects", [])
+        effect_summary = None
+        if show_effect_summary and effects:
+            eff = effects[0]
+            etype = eff.get("type")
+            if etype == "damage":
+                power = eff.get("power", "")
+                hits = eff.get("hits", 1)
+                effect_summary = f"効果: ダメージ {power} x{hits}"
+            elif etype == "draw_card":
+                power = eff.get("power", "")
+                effect_summary = f"効果: ドロー {power}"
+            elif etype == "gain_defense":
+                power = eff.get("power", "")
+                effect_summary = f"効果: 防御 +{power}"
+            elif etype == "apply_status":
+                status = eff.get("status_id", "")
+                turns = eff.get("turns", "")
+                effect_summary = f"効果: {status} {turns}ターン"
+            elif etype == "add_card_to_hand":
+                cid = eff.get("card_id", "")
+                amt = eff.get("amount", 1)
+                effect_summary = f"効果: {cid} x{amt} を手札に"
+            else:
+                effect_summary = f"効果: {etype}"
+
+        if effect_summary:
+            try:
+                eff_surf = self.fonts["medium"].render(effect_summary, True, settings.LIGHT_BLUE)
+                eff_rect = eff_surf.get_rect(centerx=card_rect.left + (card_rect.width * 0.5), y=name_rect.bottom + 6)
+                screen.blit(eff_surf, eff_rect)
+            except Exception:
+                pass
+
+        # description area
+        power_for_desc = ""
+        if action.get("effects"): power_for_desc = action["effects"][0].get("power", "")
+        description = action.get("description", "").format(power=power_for_desc)
+        description_rect = pygame.Rect(card_rect.x + 20, name_rect.bottom + 10, card_rect.width - 40, card_rect.height - name_rect.height - 80)
+        self._draw_text_multiline(screen, description, self.fonts["card"], description_rect, settings.WHITE)
+
+        # cost circle
+        if not action.get("unplayable", False):
+            cost = action.get("cost", 0)
+            if cost >= 0:
+                cost_circle_radius = int(card_rect.width * 0.12)
+                cost_circle_center = (card_rect.left + cost_circle_radius + 10, card_rect.top + cost_circle_radius + 10)
+                pygame.draw.circle(screen, settings.BLUE, cost_circle_center, cost_circle_radius)
+                pygame.draw.circle(screen, settings.WHITE, cost_circle_center, cost_circle_radius, 2)
+                cost_text = self.fonts["small"].render(str(cost), True, settings.WHITE)
+                cost_text_rect = cost_text.get_rect(center=cost_circle_center)
+                screen.blit(cost_text, cost_text_rect)
+
+        # power circle
+        power = None
+        try:
+            player = getattr(battle_state, 'player', None) if battle_state else None
+            power = ActionHandler.get_card_display_power(player, effective_id)
+        except Exception:
+            power = None
+        if power is not None:
+            effect_type = action.get("effects", [{}])[0].get("type")
+            hits = action.get("effects", [{}])[0].get("hits", 1)
+            color = settings.BLUE
+            if effect_type == "damage": color = settings.RED
+            power_circle_radius = int(card_rect.width * 0.12)
+            self._draw_power_circle(screen, power, card_rect, color, power_circle_radius, hits=hits)
+
     def _draw_text_multiline(self, surface, text, font, rect, color):
         """指定された矩形内にテキストを自動で折り返して描画する"""
         lines = text.splitlines()

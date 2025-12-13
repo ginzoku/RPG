@@ -23,3 +23,4 @@ wheels/
 # Environment
 .env
 venv/
+src/BluePrint

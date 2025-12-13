@@ -62,7 +62,22 @@ class BattleScene:
         
         # プレイヤーの戦闘開始時の状態リセット
         self.player.reset_for_battle(self.enemy_manager.enemies)
-        self.deck_manager = DeckManager()
+        # Initialize DeckManager. If the player has a persistent `master_deck`,
+        # use it so rewards persist across battles. Otherwise create a new
+        # DeckManager and then record its deck as the player's master_deck.
+        try:
+            if hasattr(self.player, 'master_deck') and isinstance(self.player.master_deck, list):
+                self.deck_manager = DeckManager(initial_deck=list(self.player.master_deck))
+            else:
+                self.deck_manager = DeckManager()
+                # capture initial deck as player's persistent collection
+                try:
+                    self.player.master_deck = list(self.deck_manager.deck)
+                except Exception:
+                    pass
+        except Exception:
+            # fallback
+            self.deck_manager = DeckManager()
         self.deck_manager.draw_cards(5)
 
         # ユニーク（特技）状態の初期化: key -> remaining cooldown turns (0で使用可能)
@@ -99,6 +114,13 @@ class BattleScene:
             if not was_game_over: # ゲームオーバーになった瞬間のみ実行
                 self.reward_gold = sum(enemy.gold for enemy in self.enemy_manager.enemies)
                 self.player.gold += self.reward_gold
+                # 勝利報酬の選択シーンを開始
+                try:
+                    from ..scenes.victory_reward_scene import VictoryRewardScene
+                    self.current_scene = VictoryRewardScene(self)
+                except Exception:
+                    # インポートやシーン作成に失敗しても既存挙動は維持
+                    pass
             self.game_over = True
             self.winner = "player"
 

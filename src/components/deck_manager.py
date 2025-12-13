@@ -3,21 +3,25 @@ import random
 from ..data.action_data import ACTIONS
 
 class DeckManager:
-    def __init__(self):
-        initial_deck = \
-            (["slash"] * 2) + \
-            (["guard"] * 4) + \
-            ["fire_ball"] + \
-            ["expose_weakness"] + \
-            ["healing_light"] + \
-            ["draw_card"] + \
-            ["obliterate"] + \
-            ["multi_slash", "sweep"] + \
-            ["rain_of_knives"] + \
-            ["forbidden_pact"] + \
-            ["research"] + \
-            ["discard_and_random_exhaust"] + \
-            ["transmute_deck"]
+    def __init__(self, initial_deck: list[str] | None = None):
+        # Allow passing an explicit initial_deck so that caller (e.g. BattleScene)
+        # can control the starting collection (for persistence across battles).
+        if initial_deck is None:
+            initial_deck = (
+                (["slash"] * 2) + \
+                (["guard"] * 4) + \
+                ["fire_ball"] + \
+                ["expose_weakness"] + \
+                ["healing_light"] + \
+                ["draw_card"] + \
+                ["obliterate"] + \
+                ["multi_slash", "sweep"] + \
+                ["rain_of_knives"] + \
+                ["forbidden_pact"] + \
+                ["research"] + \
+                ["discard_and_random_exhaust"] + \
+                ["transmute_deck"]
+            )
         self.deck: list[str] = list(initial_deck)
         self.hand: list[str] = []
         self.discard_pile: list[str] = []
@@ -306,6 +310,18 @@ class DeckManager:
     def clear_deck_transformations(self):
         """Clear any active deck transformation rules."""
         self.deck_transform_rules.clear()
+    def add_card_to_deck(self, card_id: str, to_discard: bool = True):
+        """Add a card to the player's collection during reward/shops.
+
+        By default, the card is added to the discard pile so it will be drawn
+        in subsequent turns. If `to_discard` is False, it will be added to the
+        top of the deck.
+        """
+        if to_discard:
+            self.discard_pile.append(card_id)
+        else:
+            # add to top of deck
+            self.deck.append(card_id)
     def apply_hand_end_of_turn_effects(self, player):
         """手札にあるカードの 'on_turn_end' 効果を適用する。
 

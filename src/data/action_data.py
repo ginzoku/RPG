@@ -52,14 +52,6 @@ ACTIONS = {
             {"type": "heal", "power": 8}
         ]
     },
-    "pass": {
-        "card_id": "pass",
-        "name": "パス",
-        "cost": 0,
-        "rarity": "common",
-        "description": "何もせずにターンを終了する。",
-        "effects": [{"type": "pass"}]
-    },
     "expose_weakness": {
         "card_id": "expose_weakness",
         "name": "弱点暴露",
@@ -248,7 +240,7 @@ ACTIONS = {
         "cost": 2,
         "rarity": "rare",
         "description": "戦闘終了時まで、山札内の「斬りつけ」を「ファイア」に、" \
-                       "山札内の防御カードを「小ヒール」に変換する。",
+                        "山札内の防御カードを「小ヒール」に変換する。",
         "effects": [
             {
                 "type": "transform_deck",
