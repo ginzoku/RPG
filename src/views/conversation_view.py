@@ -2,6 +2,7 @@
 import pygame
 import os
 from ..config import settings
+import os
 
 class ConversationView:
     def __init__(self, default_background_path: str | None):
@@ -49,6 +50,19 @@ class ConversationView:
         self.background_image = None
         if default_background_path:
             self.set_background(default_background_path)
+
+        # npc画像（老人用）を準備
+        self.npc_image = None
+        try:
+            npc_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'res', 'npc', 'npc.png'))
+            if os.path.exists(npc_path):
+                img = pygame.image.load(npc_path).convert_alpha()
+                # より大きく表示: 画面高さの最大40%または300pxまで（拡大要求対応）
+                desired_h = int(min(settings.SCREEN_HEIGHT * 0.40, 300))
+                w = max(1, img.get_width() * desired_h // max(1, img.get_height()))
+                self.npc_image = pygame.transform.smoothscale(img, (w, desired_h))
+        except Exception:
+            self.npc_image = None
     
     def _get_japanese_font(self, size: int) -> pygame.font.Font:
         font_paths = [
@@ -93,6 +107,14 @@ class ConversationView:
         if self.background_image:
             screen.blit(self.background_image, (0, 0))
 
+        # 会話中の全画面半透明オーバーレイ（マップの上、会話UIの下に表示される）
+        try:
+            overlay = pygame.Surface((settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, int(255 * 0.6)))
+            screen.blit(overlay, (0, 0))
+        except Exception:
+            pass
+
         # 外側の話者名ボックスを描画（ダイアログボックスの左上の外側）
         if self.speaker_name:
             pygame.draw.rect(screen, (40, 40, 40), self.speaker_outer_rect, border_radius=6)
@@ -106,6 +128,26 @@ class ConversationView:
         # ダイアログボックスの描画
         pygame.draw.rect(screen, (0, 0, 0, 180), self.dialogue_box_rect, border_radius=10) # 半透明の黒
         pygame.draw.rect(screen, (255, 255, 255), self.dialogue_box_rect, 2, border_radius=10) # 枠線
+
+        # 話者が「老人」の場合、右上にNPC画像を表示
+        try:
+            if self.speaker_name == '老人' and self.npc_image:
+                pad = 8
+                img_w, img_h = self.npc_image.get_size()
+                # 画面を10分割したとき、画像の右端から画面右端まで1/10分の余白を確保する
+                margin = settings.SCREEN_WIDTH // 10
+                img_x = settings.SCREEN_WIDTH - margin - img_w
+                img_y = self.dialogue_box_rect.y - pad - img_h
+                # 画面外に出ないように調整
+                if img_y < 8:
+                    img_y = 8
+                if img_x < 8:
+                    img_x = 8
+                if img_x + img_w > settings.SCREEN_WIDTH - 8:
+                    img_x = settings.SCREEN_WIDTH - img_w - 8
+                screen.blit(self.npc_image, (img_x, img_y))
+        except Exception:
+            pass
 
 
         # ダイアログテキストの描画（左上に寄せて折返し表示）

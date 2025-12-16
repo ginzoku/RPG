@@ -151,6 +151,17 @@ class GameController:
                 except Exception:
                     pass
                 try:
+                    # If this is a map conversation view, draw the map underneath first
+                    try:
+                        view = getattr(self.conversation_scene, 'view', None)
+                        if view and view.__class__.__name__ == 'MapConversationView':
+                            try:
+                                # draw the map behind the conversation UI
+                                self.map_view.draw(self.map_scene)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
                     self.conversation_scene.draw(self.screen)
                 except Exception as e:
                     print(f"ERROR: Exception during ConversationScene.draw: {e}", flush=True)

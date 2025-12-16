@@ -2,6 +2,7 @@
 import pygame
 import os
 from ..config import settings
+import os
 
 
 class MapConversationView:
@@ -21,6 +22,19 @@ class MapConversationView:
         self.speaker_name = ""
         self.choices = []
         self.selected_choice_index = 0
+
+        # npc画像（老人用）ロード
+        self.npc_image = None
+        try:
+            npc_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'res', 'npc', 'npc.png'))
+            if os.path.exists(npc_path):
+                img = pygame.image.load(npc_path).convert_alpha()
+                # より大きく表示: 画面高さの最大40%または300pxまで（拡大要求対応）
+                desired_h = int(min(settings.SCREEN_HEIGHT * 0.40, 300))
+                w = max(1, img.get_width() * desired_h // max(1, img.get_height()))
+                self.npc_image = pygame.transform.smoothscale(img, (w, desired_h))
+        except Exception:
+            self.npc_image = None
 
     def _get_japanese_font(self, size: int) -> pygame.font.Font:
         font_paths = [
@@ -63,6 +77,13 @@ class MapConversationView:
     def draw(self, screen: pygame.Surface):
         # マップの背景をそのままにして、画面下部にログ風パネルを描画する
         try:
+            # 全画面半透明オーバーレイ（マップの上、会話UIの下）
+            try:
+                overlay = pygame.Surface((settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, int(255 * 0.6)))
+                screen.blit(overlay, (0, 0))
+            except Exception:
+                pass
             log_height = int(settings.SCREEN_HEIGHT * 0.28)
             log_rect = pygame.Rect(0, settings.SCREEN_HEIGHT - log_height, settings.SCREEN_WIDTH, log_height)
 
@@ -89,6 +110,23 @@ class MapConversationView:
                 sx = outer_rect.x + (outer_rect.width - s_surf.get_width()) // 2
                 sy = outer_rect.y + (outer_rect.height - s_surf.get_height()) // 2
                 screen.blit(s_surf, (sx, sy))
+
+            # 話者が「老人」の場合はログパネルの外側右上に画像を表示
+            if self.speaker_name == '老人' and self.npc_image:
+                pad = 8
+                img_w, img_h = self.npc_image.get_size()
+                # 画面を10分割したとき、画像の右端から画面右端まで1/10分の余白を確保する
+                margin = settings.SCREEN_WIDTH // 10
+                img_x = settings.SCREEN_WIDTH - margin - img_w
+                img_y = log_rect.y - pad - img_h
+                # 画面外に出ないように調整
+                if img_y < 8:
+                    img_y = 8
+                if img_x < 8:
+                    img_x = 8
+                if img_x + img_w > settings.SCREEN_WIDTH - 8:
+                    img_x = settings.SCREEN_WIDTH - img_w - 8
+                screen.blit(self.npc_image, (img_x, img_y))
 
             # テキストを折り返して表示（簡易実装）
             words = self.dialogue_text.split(' ')
