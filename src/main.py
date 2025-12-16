@@ -31,6 +31,8 @@ class GameController:
         self.battle_scene = BattleScene(self.player) # プレイヤーオブジェクトを渡す
         self.battle_view = BattleView() # 修正: 重複していた行を削除
         self.running = True
+        # フラグ: 会話終了直後に同じ入力で再度会話が始まらないよう一度だけインタラクションを無視する
+        self._skip_next_map_interaction = False
 
     def run(self):
         while self.running:
@@ -63,6 +65,11 @@ class GameController:
                     self.title_scene.process_input(event)
                 elif self.game_state == "bestiary":
                     self.bestiary_scene.process_input(event)
+                elif self.game_state == "conversation" and getattr(self, 'conversation_scene', None):
+                    try:
+                        self.conversation_scene.process_input(event)
+                    except Exception:
+                        pass
 
             # fallback flag: VictoryRewardScene may set return_to_map_requested on the battle_scene
             try:
@@ -85,12 +92,68 @@ class GameController:
 
             # state updates / drawing
             if self.game_state == "map":
-                interaction_target = self.map_controller.handle_input(events, self.map_scene)
-                self.map_scene.update()
-                self.map_view.draw(self.map_scene)
-                if self.map_scene.collided_enemy:
-                    self.game_state = "battle"
-                    self.battle_scene.reset(self.map_scene.collided_enemy.enemy_group_id)
+                # if we just finished a conversation this frame, skip map interaction once
+                if getattr(self, '_skip_next_map_interaction', False):
+                    interaction_target = None
+                else:
+                    interaction_target = self.map_controller.handle_input(events, self.map_scene)
+                if interaction_target:
+                    # start map conversation
+                    def _conv_finished(result=None):
+                        try:
+                            # mark to skip next map interaction (same-frame Enter press)
+                            self._skip_next_map_interaction = True
+                        finally:
+                            self.game_state = 'map'
+                            self.conversation_scene = None
+
+                    try:
+                        from .scenes.conversation_scene import ConversationScene
+                        from .views.map_conversation_view import MapConversationView
+                        print(f"DEBUG: Map interaction -> creating ConversationScene for {interaction_target.conversation_id}", flush=True)
+                        self.conversation_scene = ConversationScene(self.player, interaction_target.conversation_id, _conv_finished)
+                        # replace view with map-specific view (ensures flip and UI choice)
+                        try:
+                            bg = self.conversation_scene.conversation_data.get('default_background')
+                            self.conversation_scene.view = MapConversationView(bg)
+                            # repopulate the new view with the current event's text/choices
+                            try:
+                                # call internal helper to apply current event to the (new) view
+                                self.conversation_scene._show_current_event()
+                            except Exception:
+                                # fallback: manually set dialogue if available
+                                ev = self.conversation_scene.conversation_data['events'][self.conversation_scene.current_event_index]
+                                try:
+                                    self.conversation_scene.view.set_dialogue(ev.get('speaker'), ev.get('text', ''))
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+                        self.game_state = 'conversation'
+                    except Exception as e:
+                        print(f"ERROR: Failed to create map conversation: {e}", flush=True)
+                        self.conversation_scene = None
+                else:
+                    self.map_scene.update()
+                    self.map_view.draw(self.map_scene)
+                    if self.map_scene.collided_enemy:
+                        self.game_state = "battle"
+                        self.battle_scene.reset(self.map_scene.collided_enemy.enemy_group_id)
+
+                # reset the skip flag after handling this map frame so next frames allow interactions
+                if getattr(self, '_skip_next_map_interaction', False):
+                    # we've skipped one map interaction cycle, clear the flag
+                    self._skip_next_map_interaction = False
+
+            elif self.game_state == 'conversation' and getattr(self, 'conversation_scene', None):
+                try:
+                    self.conversation_scene.update_state()
+                except Exception:
+                    pass
+                try:
+                    self.conversation_scene.draw(self.screen)
+                except Exception as e:
+                    print(f"ERROR: Exception during ConversationScene.draw: {e}", flush=True)
 
             elif self.game_state == "battle":
                 self.battle_scene.update_state()
