@@ -75,9 +75,20 @@ class MapConversationView:
             max_width = log_rect.width - padding * 2
 
             # 話者を左上に表示
+            # 外側に配置する話者名ボックス（ログの左上外側）
             if self.speaker_name:
-                s_surf = self.speaker_font.render(self.speaker_name, True, settings.YELLOW)
-                screen.blit(s_surf, (log_rect.x + padding, log_rect.y + padding))
+                speaker_box_width = int(settings.SCREEN_WIDTH * 0.18)
+                speaker_box_height = int(settings.SCREEN_HEIGHT * 0.06)
+                gap = 8
+                outer_x = max(10, log_rect.x + padding - speaker_box_width - gap)
+                outer_y = log_rect.y - speaker_box_height - gap
+                outer_rect = pygame.Rect(outer_x, outer_y, speaker_box_width, speaker_box_height)
+                pygame.draw.rect(screen, (40, 40, 40), outer_rect, border_radius=6)
+                pygame.draw.rect(screen, settings.WHITE, outer_rect, 2, border_radius=6)
+                s_surf = self.speaker_font.render(self.speaker_name, True, settings.WHITE)
+                sx = outer_rect.x + (outer_rect.width - s_surf.get_width()) // 2
+                sy = outer_rect.y + (outer_rect.height - s_surf.get_height()) // 2
+                screen.blit(s_surf, (sx, sy))
 
             # テキストを折り返して表示（簡易実装）
             words = self.dialogue_text.split(' ')
@@ -94,11 +105,14 @@ class MapConversationView:
             if cur:
                 lines.append(cur)
 
-            # テキストは話者行の下から描画
-            start_y = log_rect.y + padding + (self.speaker_font.get_height() + 6 if self.speaker_name else 0)
-            for i, line in enumerate(lines[:6]):
+            # テキストはログパネルの上寄せで描画（パネル上端から小さく下がった位置）
+            start_x = log_rect.x + padding
+            # 強制的に上寄せ: 上端からの固定オフセットを使う
+            start_y = log_rect.y + 6
+            line_height = self.font.get_height() + 6
+            for i, line in enumerate(lines[:8]):
                 surf = self.font.render(line, True, settings.WHITE)
-                screen.blit(surf, (log_rect.x + padding, start_y + i * (self.font.get_height() + 6)))
+                screen.blit(surf, (start_x, start_y + i * line_height))
 
         finally:
             # マップ会話時はここで必ず表示更新する
