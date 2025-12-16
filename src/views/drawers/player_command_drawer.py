@@ -340,8 +340,13 @@ class PlayerCommandDrawer:
         pygame.draw.rect(screen, (50, 50, 70), deck_rect, border_radius=6)
         pygame.draw.rect(screen, settings.WHITE, deck_rect, 2, border_radius=6)
 
-        # centered label '山札' in black text on the button-like area
-        label = self.fonts["small"].render("山札", True, (0, 0, 0))
+        # show deck count (number) in the button-like area
+        deck_count = 0
+        try:
+            deck_count = len(battle_state.deck_manager.deck) if getattr(battle_state, 'deck_manager', None) else 0
+        except Exception:
+            deck_count = 0
+        label = self.fonts["small"].render(str(deck_count), True, (0, 0, 0))
         label_rect = label.get_rect(center=deck_rect.center)
         screen.blit(label, label_rect)
         # expose the clickable rect to the battle scene so input handling matches visual

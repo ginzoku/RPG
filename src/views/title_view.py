@@ -8,7 +8,7 @@ class TitleView:
     def __init__(self):
         self.screen = None
         self.fonts = self._load_fonts()
-        self.menu_items = [("ゲームを始める", "start"), ("終了する", "quit")]
+        self.menu_items = [("ゲームを始める", "start"), ("モンスター図鑑", "bestiary"), ("終了する", "quit")]
         self.menu_rects: list[tuple[pygame.Rect, str]] = []
 
     def _get_japanese_font(self, size: int) -> pygame.font.Font:
@@ -62,10 +62,7 @@ class TitleView:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             for rect, key in self.menu_rects:
                 if rect.collidepoint(event.pos):
-                    if key == "quit":
-                        return "quit"
-                    if key == "start":
-                        return "start"
+                    return key
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:

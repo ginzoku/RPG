@@ -9,6 +9,7 @@ from .controllers.map_controller import MapController
 from .scenes.battle_scene import BattleScene # 修正
 from .views.battle_view import BattleView
 from .scenes.title_scene import TitleScene
+from .scenes.bestiary_scene import BestiaryScene
 
 class GameController:
     def __init__(self):
@@ -26,79 +27,69 @@ class GameController:
         self.map_view = MapView(self.screen)
         self.map_controller = MapController()
         self.title_scene = TitleScene()
+        self.bestiary_scene = BestiaryScene()
         self.battle_scene = BattleScene(self.player) # プレイヤーオブジェクトを渡す
         self.battle_view = BattleView() # 修正: 重複していた行を削除
         self.running = True
 
     def run(self):
-        while self.running: # 修正: ゲームループを追加
+        while self.running:
             self.clock.tick(settings.FPS)
             events = pygame.event.get()
             for event in events:
+                # standard quit
                 if event.type == pygame.QUIT:
                     self.running = False
-                    # Custom event: return to map after reward selection
-                    if event.type == pygame.USEREVENT and getattr(event, 'action', None) == 'RETURN_TO_MAP':
-                        try:
-                            # remove the collided enemy from the map so it doesn't respawn
-                            if getattr(self.map_scene, 'collided_enemy', None):
-                                self.map_scene.remove_enemy(self.map_scene.collided_enemy)
-                        except Exception:
-                            pass
-                        # switch to map state and reset battle flags
-                        self.game_state = 'map'
-                        try:
-                            self.battle_scene.game_over = False
-                            self.battle_scene.winner = None
-                            self.battle_scene.current_scene = self.battle_scene
-                        except Exception:
-                            pass
-                # Also handle explicit flag set by VictoryRewardScene.finish as a
-                # fallback for platforms/timings where posted events might not
-                # be processed immediately.
-                try:
-                    if self.game_state == 'battle' and getattr(self.battle_scene, 'return_to_map_requested', False):
-                        # remove collided enemy on the map
-                        try:
-                            if getattr(self.map_scene, 'collided_enemy', None):
-                                self.map_scene.remove_enemy(self.map_scene.collided_enemy)
-                        except Exception:
-                            pass
-                        self.game_state = 'map'
-                        # clear the flag and reset battle scene state
-                        try:
-                            setattr(self.battle_scene, 'return_to_map_requested', False)
-                            self.battle_scene.game_over = False
-                            self.battle_scene.winner = None
-                            self.battle_scene.current_scene = self.battle_scene
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
+
+                # custom posted event for return to map
+                if event.type == pygame.USEREVENT and getattr(event, 'action', None) == 'RETURN_TO_MAP':
+                    try:
+                        if getattr(self.map_scene, 'collided_enemy', None):
+                            self.map_scene.remove_enemy(self.map_scene.collided_enemy)
+                    except Exception:
+                        pass
+                    self.game_state = 'map'
+                    try:
+                        self.battle_scene.game_over = False
+                        self.battle_scene.winner = None
+                        self.battle_scene.current_scene = self.battle_scene
+                    except Exception:
+                        pass
+
+                # dispatch to current scene input handlers
                 if self.game_state == "battle":
                     self.battle_scene.process_input(event)
                 elif self.game_state == "title":
-                    # タイトル画面の入力処理
                     self.title_scene.process_input(event)
+                elif self.game_state == "bestiary":
+                    self.bestiary_scene.process_input(event)
 
+            # fallback flag: VictoryRewardScene may set return_to_map_requested on the battle_scene
+            try:
+                if self.game_state == 'battle' and getattr(self.battle_scene, 'return_to_map_requested', False):
+                    try:
+                        if getattr(self.map_scene, 'collided_enemy', None):
+                            self.map_scene.remove_enemy(self.map_scene.collided_enemy)
+                    except Exception:
+                        pass
+                    self.game_state = 'map'
+                    try:
+                        setattr(self.battle_scene, 'return_to_map_requested', False)
+                        self.battle_scene.game_over = False
+                        self.battle_scene.winner = None
+                        self.battle_scene.current_scene = self.battle_scene
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # state updates / drawing
             if self.game_state == "map":
                 interaction_target = self.map_controller.handle_input(events, self.map_scene)
                 self.map_scene.update()
-
-                # interaction_target は現時点ではNPCの会話を想定しているが、
-                # 今回はバトル中の会話に焦点を当てているため、この部分はコメントアウトまたは削除
-                # if interaction_target:
-                #     self.game_state = "conversation"
-                #     self.conversation_scene.start_conversation(interaction_target.conversation_id)
-                #     continue
-
                 self.map_view.draw(self.map_scene)
-
-                # 敵との衝突判定
                 if self.map_scene.collided_enemy:
-                    # 戦闘開始
                     self.game_state = "battle"
-                    # どの敵グループと戦うか設定してバトルシーンをリセット
                     self.battle_scene.reset(self.map_scene.collided_enemy.enemy_group_id)
 
             elif self.game_state == "battle":
@@ -106,35 +97,48 @@ class GameController:
                 self.battle_view.draw(self.battle_scene)
 
             elif self.game_state == "title":
-                # タイトル描画
                 self.title_scene.draw(self.screen)
-                # タイトルで選択されたオプションに応じて遷移
-                if getattr(self.title_scene, 'selected_option', None) == 'start':
-                    # ゲーム開始 -> マップへ
+                # transitions from title
+                sel = getattr(self.title_scene, 'selected_option', None)
+                if sel == 'start':
                     self.game_state = 'map'
-                    # 必要ならマップシーンを初期化する
                     self.map_scene = MapScene()
-                    # クリア選択をリセット
                     self.title_scene.selected_option = None
-                elif getattr(self.title_scene, 'selected_option', None) == 'quit':
+                elif sel == 'quit':
                     self.running = False
                     break
+                elif sel == 'bestiary':
+                    self.game_state = 'bestiary'
+                    self.title_scene.selected_option = None
 
-                # 戦闘終了判定
+            elif self.game_state == 'bestiary':
+                # allow the scene to update (e.g. scrolling / selection logic)
+                try:
+                    self.bestiary_scene.update_state()
+                except Exception:
+                    pass
+                self.bestiary_scene.draw(self.screen)
+                if getattr(self.bestiary_scene, 'requested_exit', False):
+                    self.bestiary_scene.requested_exit = False
+                    self.game_state = 'title'
+
+            # battle end handling (kept from original)
+            try:
                 if self.battle_scene.game_over:
-                    # Rキーでリスタートする代わりにマップに戻る
                     keys = pygame.key.get_pressed()
                     if keys[pygame.K_r]:
                         if self.battle_scene.winner == "player":
-                            # 勝利した場合、マップから敵を削除
-                            self.map_scene.remove_enemy(self.map_scene.collided_enemy)
-                        
-                        self.game_state = "map" # マップに戻る
-                        self.battle_scene.game_over = False # ゲームオーバー状態をリセット
+                            try:
+                                self.map_scene.remove_enemy(self.map_scene.collided_enemy)
+                            except Exception:
+                                pass
+                        self.game_state = "map"
+                        self.battle_scene.game_over = False
+            except Exception:
+                pass
 
-        
         pygame.quit()
-        sys.exit() # 修正: ループの外に移動
+        sys.exit()
 
 if __name__ == "__main__":
     # 修正: 実行ブロックを追加
