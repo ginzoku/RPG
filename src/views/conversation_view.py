@@ -51,18 +51,16 @@ class ConversationView:
         if default_background_path:
             self.set_background(default_background_path)
 
-        # npc画像（老人用）を準備
-        self.npc_image = None
+        # スピーカー画像群（speaker name -> pygame.Surface）
+        self.speaker_images: dict[str, pygame.Surface] = {}
+
+        # 互換: 既存の npc.png を自動で '老人' に割り当てる（あれば）
         try:
             npc_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'res', 'npc', 'npc.png'))
             if os.path.exists(npc_path):
-                img = pygame.image.load(npc_path).convert_alpha()
-                # より大きく表示: 画面高さの最大40%または300pxまで（拡大要求対応）
-                desired_h = int(min(settings.SCREEN_HEIGHT * 0.40, 300))
-                w = max(1, img.get_width() * desired_h // max(1, img.get_height()))
-                self.npc_image = pygame.transform.smoothscale(img, (w, desired_h))
+                self.set_speaker_image('老人', npc_path)
         except Exception:
-            self.npc_image = None
+            pass
         # アニメーション用状態
         self.npc_animating = False
         self.npc_anim_start_x = 0
@@ -88,34 +86,60 @@ class ConversationView:
         return pygame.font.Font(None, size)
 
     def set_dialogue(self, speaker: str | None, text: str):
-        self.speaker_name = speaker if speaker else ""
+        prev_speaker = self.speaker_name
+        new_speaker = speaker if speaker else ""
+        self.speaker_name = new_speaker
         self.dialogue_text = text
-        # NPC画像のスライドイン開始
+        # NPC画像のスライドイン開始（発言者が変わったときのみアニメーション）
         try:
-            if self.speaker_name == '老人' and self.npc_image:
+            img_for_speaker = self.speaker_images.get(new_speaker)
+            if img_for_speaker:
                 now = pygame.time.get_ticks()
-                img_w, img_h = self.npc_image.get_size()
-                margin = settings.SCREEN_WIDTH // 10
-                target_x = settings.SCREEN_WIDTH - margin - img_w
-                # 開始位置をさらに遠方にして画面外から入ってくる印象を強める
-                start_x = settings.SCREEN_WIDTH + img_w * 2 + (settings.SCREEN_WIDTH // 5)
-                self.npc_anim_start_x = start_x
-                self.npc_anim_target_x = target_x
-                self.npc_anim_start_time = now
-                self.npc_animating = True
-                self.npc_anim_completed = False
-                # フェードイン開始設定
-                self.npc_desired_visible = True
-                self.npc_fade_start_time = now
-                self.npc_alpha = 0
+                # 発言者が変化した場合のみスライド／フェードを開始
+                if prev_speaker != new_speaker:
+                    img_w, img_h = img_for_speaker.get_size()
+                    margin = settings.SCREEN_WIDTH // 10
+                    target_x = settings.SCREEN_WIDTH - margin - img_w
+                    # 開始位置をさらに遠方にして画面外から入ってくる印象を強める
+                    start_x = settings.SCREEN_WIDTH + img_w * 2 + (settings.SCREEN_WIDTH // 5)
+                    self.npc_anim_start_x = start_x
+                    self.npc_anim_target_x = target_x
+                    self.npc_anim_start_time = now
+                    self.npc_animating = True
+                    self.npc_anim_completed = False
+                    # フェードイン開始設定
+                    self.npc_desired_visible = True
+                    self.npc_fade_start_time = now
+                    self.npc_alpha = 0
+                else:
+                    # 同一発言者の継続: アニメーションは再生せず、表示フラグだけ維持
+                    self.npc_desired_visible = True
             else:
-                # 非老人ならアニメーションを止め、フェードアウトを開始
+                # 別の発言者・空白になった場合はフェードアウトを開始
                 now = pygame.time.get_ticks()
                 self.npc_desired_visible = False
                 self.npc_fade_start_time = now
                 self.npc_animating = False
         except Exception:
             self.npc_animating = False
+
+    def set_speaker_image(self, speaker: str, image_path: str):
+        """Load and store a speaker image. image_path may be absolute or relative to cwd."""
+        try:
+            # resolve path
+            if not os.path.isabs(image_path):
+                candidate = os.path.abspath(os.path.join(os.getcwd(), image_path))
+            else:
+                candidate = image_path
+            if not os.path.exists(candidate):
+                return
+            img = pygame.image.load(candidate).convert_alpha()
+            desired_h = int(min(settings.SCREEN_HEIGHT * 0.40, 300))
+            w = max(1, img.get_width() * desired_h // max(1, img.get_height()))
+            surf = pygame.transform.smoothscale(img, (w, desired_h))
+            self.speaker_images[speaker] = surf
+        except Exception:
+            pass
 
     def set_choices(self, choices: list[str]):
         self.choices = choices
@@ -167,10 +191,11 @@ class ConversationView:
         pygame.draw.rect(screen, (0, 0, 0, 180), self.dialogue_box_rect, border_radius=10) # 半透明の黒
         pygame.draw.rect(screen, (255, 255, 255), self.dialogue_box_rect, 2, border_radius=10) # 枠線
 
-        # 話者が「老人」の場合、右上にNPC画像を表示（フェード + スライドイン）
+        # 発言者の画像（あれば）を右上外側に表示（フェード + スライドイン）
         try:
-            if self.speaker_name == '老人' and self.npc_image:
-                img_w, img_h = self.npc_image.get_size()
+            img_for_speaker = self.speaker_images.get(self.speaker_name)
+            if img_for_speaker:
+                img_w, img_h = img_for_speaker.get_size()
                 img_y = self.dialogue_box_rect.y - 8 - img_h
                 if img_y < 8:
                     img_y = 8
@@ -208,11 +233,11 @@ class ConversationView:
                 # フェード時はアルファを適用して描画（alpha=0なら描画しない）
                 if self.npc_alpha > 0:
                     try:
-                        temp = self.npc_image.copy()
+                        temp = img_for_speaker.copy()
                         temp.set_alpha(self.npc_alpha)
                         screen.blit(temp, (img_x, img_y))
                     except Exception:
-                        screen.blit(self.npc_image, (img_x, img_y))
+                        screen.blit(img_for_speaker, (img_x, img_y))
         except Exception:
             pass
 

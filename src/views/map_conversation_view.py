@@ -23,18 +23,15 @@ class MapConversationView:
         self.choices = []
         self.selected_choice_index = 0
 
-        # npc画像（老人用）ロード
-        self.npc_image = None
+        # スピーカー画像群
+        self.speaker_images: dict[str, pygame.Surface] = {}
+        # 互換で npc.png があれば自動割り当て
         try:
             npc_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'res', 'npc', 'npc.png'))
             if os.path.exists(npc_path):
-                img = pygame.image.load(npc_path).convert_alpha()
-                # より大きく表示: 画面高さの最大40%または300pxまで（拡大要求対応）
-                desired_h = int(min(settings.SCREEN_HEIGHT * 0.40, 300))
-                w = max(1, img.get_width() * desired_h // max(1, img.get_height()))
-                self.npc_image = pygame.transform.smoothscale(img, (w, desired_h))
+                self.set_speaker_image('老人', npc_path)
         except Exception:
-            self.npc_image = None
+            pass
 
         # アニメーション用状態
         self.npc_animating = False
@@ -64,34 +61,56 @@ class MapConversationView:
         return pygame.font.Font(None, size)
 
     def set_dialogue(self, speaker: str | None, text: str):
-        self.speaker_name = speaker if speaker else ""
+        prev_speaker = self.speaker_name
+        new_speaker = speaker if speaker else ""
+        self.speaker_name = new_speaker
         self.dialogue_text = text
-        # NPC画像のスライドイン開始
+        # NPC画像のスライドイン開始（発言者が変わったときのみアニメーション）
         try:
-            if self.speaker_name == '老人' and self.npc_image:
+            img_for_speaker = self.speaker_images.get(new_speaker)
+            if img_for_speaker:
                 now = pygame.time.get_ticks()
-                img_w, img_h = self.npc_image.get_size()
-                margin = settings.SCREEN_WIDTH // 10
-                target_x = settings.SCREEN_WIDTH - margin - img_w
-                # 開始位置をより遠くに設定して完全に画面外からスライドしてくる印象を強める
-                start_x = settings.SCREEN_WIDTH + img_w * 2 + (settings.SCREEN_WIDTH // 5)
-                self.npc_anim_start_x = start_x
-                self.npc_anim_target_x = target_x
-                self.npc_anim_start_time = now
-                self.npc_animating = True
-                self.npc_anim_completed = False
-                # フェードインを開始する
-                self.npc_desired_visible = True
-                self.npc_fade_start_time = now
-                self.npc_alpha = 0
+                if prev_speaker != new_speaker:
+                    img_w, img_h = img_for_speaker.get_size()
+                    margin = settings.SCREEN_WIDTH // 10
+                    target_x = settings.SCREEN_WIDTH - margin - img_w
+                    # 開始位置をより遠くに設定して完全に画面外からスライドしてくる印象を強める
+                    start_x = settings.SCREEN_WIDTH + img_w * 2 + (settings.SCREEN_WIDTH // 5)
+                    self.npc_anim_start_x = start_x
+                    self.npc_anim_target_x = target_x
+                    self.npc_anim_start_time = now
+                    self.npc_animating = True
+                    self.npc_anim_completed = False
+                    # フェードインを開始する
+                    self.npc_desired_visible = True
+                    self.npc_fade_start_time = now
+                    self.npc_alpha = 0
+                else:
+                    # 同一発言者の継続: アニメーションは再生せず、表示フラグだけ維持
+                    self.npc_desired_visible = True
             else:
-                # 非老人ならフェードアウトを始める
                 now = pygame.time.get_ticks()
                 self.npc_desired_visible = False
                 self.npc_fade_start_time = now
                 self.npc_animating = False
         except Exception:
             self.npc_animating = False
+
+    def set_speaker_image(self, speaker: str, image_path: str):
+        try:
+            if not os.path.isabs(image_path):
+                candidate = os.path.abspath(os.path.join(os.getcwd(), image_path))
+            else:
+                candidate = image_path
+            if not os.path.exists(candidate):
+                return
+            img = pygame.image.load(candidate).convert_alpha()
+            desired_h = int(min(settings.SCREEN_HEIGHT * 0.40, 300))
+            w = max(1, img.get_width() * desired_h // max(1, img.get_height()))
+            surf = pygame.transform.smoothscale(img, (w, desired_h))
+            self.speaker_images[speaker] = surf
+        except Exception:
+            pass
 
     def set_choices(self, choices: list[str]):
         self.choices = choices
@@ -152,8 +171,9 @@ class MapConversationView:
 
             # 話者が「老人」の場合はログパネルの外側に画像を表示（スライドイン）
             # 表示はアニメーション中か完了している場合のみ行う
-            if self.speaker_name == '老人' and self.npc_image and (self.npc_animating or getattr(self, 'npc_anim_completed', False)):
-                img_w, img_h = self.npc_image.get_size()
+            img_for_speaker = self.speaker_images.get(self.speaker_name)
+            if img_for_speaker and (self.npc_animating or getattr(self, 'npc_anim_completed', False)):
+                img_w, img_h = img_for_speaker.get_size()
                 img_y = log_rect.y - 8 - img_h
                 if img_y < 8:
                     img_y = 8
@@ -162,16 +182,11 @@ class MapConversationView:
                     now_f = pygame.time.get_ticks()
                     if self.npc_fade_start_time:
                         ft = (now_f - self.npc_fade_start_time) / max(1, self.npc_fade_duration)
+                        ft = max(0.0, min(1.0, ft))
                         if self.npc_desired_visible:
-                            if ft >= 1.0:
-                                self.npc_alpha = 255
-                            else:
-                                self.npc_alpha = int(255 * min(1.0, ft))
+                            self.npc_alpha = int(255 * ft)
                         else:
-                            if ft >= 1.0:
-                                self.npc_alpha = 0
-                            else:
-                                self.npc_alpha = int(255 * (1.0 - min(1.0, ft)))
+                            self.npc_alpha = int(255 * (1.0 - ft))
                 except Exception:
                     pass
 
@@ -193,11 +208,11 @@ class MapConversationView:
                     pass
                 else:
                     try:
-                        temp = self.npc_image.copy()
+                        temp = img_for_speaker.copy()
                         temp.set_alpha(self.npc_alpha)
                         screen.blit(temp, (img_x, img_y))
                     except Exception:
-                        screen.blit(self.npc_image, (img_x, img_y))
+                        screen.blit(img_for_speaker, (img_x, img_y))
                 # 画面端補正
                 if img_x < 8:
                     img_x = 8

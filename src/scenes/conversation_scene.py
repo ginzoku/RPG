@@ -33,6 +33,24 @@ class ConversationScene:
 
     def _show_current_event(self):
         event = self.conversation_data["events"][self.current_event_index]
+        # load any speaker images declared at conversation level
+        try:
+            sp_imgs = self.conversation_data.get('speaker_images', {}) or {}
+            for spk, path in sp_imgs.items():
+                try:
+                    self.view.set_speaker_image(spk, path)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # per-event override
+        if 'speaker_image' in event and event.get('speaker'):
+            try:
+                self.view.set_speaker_image(event.get('speaker'), event.get('speaker_image'))
+            except Exception:
+                pass
+
         self.view.set_dialogue(event.get("speaker"), event["text"])
 
         # eventに'background'キーがあればそれを使い、なければdefault_backgroundを試す

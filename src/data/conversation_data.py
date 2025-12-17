@@ -36,6 +36,10 @@ CONVERSATIONS = {
     },
     "npc_1_intro": {
         "default_background": None, # NPC会話には背景がない場合
+        # スピーカーごとの画像パス（相対パスまたは絶対パス）。ビューが解決して読み込みます。
+        "speaker_images": {
+            "老人": "src/res/npc/npc.png"
+        },
         "events": [
             {"speaker": "老人", "text": "やあ、旅の者よ。"},
             {"speaker": "老人", "text": "この先には恐ろしい魔物が待ち構えておる。"},
