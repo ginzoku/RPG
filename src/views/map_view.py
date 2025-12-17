@@ -47,4 +47,4 @@ class MapView:
         for npc in map_scene.npcs:
             pygame.draw.rect(self.screen, npc.color, npc.rect)
 
-        pygame.display.flip()
+        # NOTE: do not call `pygame.display.flip()` here — the main loop performs a single flip per frame.

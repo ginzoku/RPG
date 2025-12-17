@@ -36,6 +36,19 @@ class MapConversationView:
         except Exception:
             self.npc_image = None
 
+        # アニメーション用状態
+        self.npc_animating = False
+        self.npc_anim_start_x = 0
+        self.npc_anim_target_x = 0
+        self.npc_anim_start_time = 0
+        self.npc_anim_duration = 400  # ms
+        self.npc_anim_completed = False
+        # フェード用
+        self.npc_alpha = 0
+        self.npc_fade_start_time = 0
+        self.npc_fade_duration = 200  # ms
+        self.npc_desired_visible = False
+
     def _get_japanese_font(self, size: int) -> pygame.font.Font:
         font_paths = [
             "C:\\Windows\\Fonts\\meiryo.ttc",
@@ -53,6 +66,32 @@ class MapConversationView:
     def set_dialogue(self, speaker: str | None, text: str):
         self.speaker_name = speaker if speaker else ""
         self.dialogue_text = text
+        # NPC画像のスライドイン開始
+        try:
+            if self.speaker_name == '老人' and self.npc_image:
+                now = pygame.time.get_ticks()
+                img_w, img_h = self.npc_image.get_size()
+                margin = settings.SCREEN_WIDTH // 10
+                target_x = settings.SCREEN_WIDTH - margin - img_w
+                # 開始位置をより遠くに設定して完全に画面外からスライドしてくる印象を強める
+                start_x = settings.SCREEN_WIDTH + img_w * 2 + (settings.SCREEN_WIDTH // 5)
+                self.npc_anim_start_x = start_x
+                self.npc_anim_target_x = target_x
+                self.npc_anim_start_time = now
+                self.npc_animating = True
+                self.npc_anim_completed = False
+                # フェードインを開始する
+                self.npc_desired_visible = True
+                self.npc_fade_start_time = now
+                self.npc_alpha = 0
+            else:
+                # 非老人ならフェードアウトを始める
+                now = pygame.time.get_ticks()
+                self.npc_desired_visible = False
+                self.npc_fade_start_time = now
+                self.npc_animating = False
+        except Exception:
+            self.npc_animating = False
 
     def set_choices(self, choices: list[str]):
         self.choices = choices
@@ -111,22 +150,59 @@ class MapConversationView:
                 sy = outer_rect.y + (outer_rect.height - s_surf.get_height()) // 2
                 screen.blit(s_surf, (sx, sy))
 
-            # 話者が「老人」の場合はログパネルの外側右上に画像を表示
-            if self.speaker_name == '老人' and self.npc_image:
-                pad = 8
+            # 話者が「老人」の場合はログパネルの外側に画像を表示（スライドイン）
+            # 表示はアニメーション中か完了している場合のみ行う
+            if self.speaker_name == '老人' and self.npc_image and (self.npc_animating or getattr(self, 'npc_anim_completed', False)):
                 img_w, img_h = self.npc_image.get_size()
-                # 画面を10分割したとき、画像の右端から画面右端まで1/10分の余白を確保する
-                margin = settings.SCREEN_WIDTH // 10
-                img_x = settings.SCREEN_WIDTH - margin - img_w
-                img_y = log_rect.y - pad - img_h
-                # 画面外に出ないように調整
+                img_y = log_rect.y - 8 - img_h
                 if img_y < 8:
                     img_y = 8
+                # フェード処理を計算
+                try:
+                    now_f = pygame.time.get_ticks()
+                    if self.npc_fade_start_time:
+                        ft = (now_f - self.npc_fade_start_time) / max(1, self.npc_fade_duration)
+                        if self.npc_desired_visible:
+                            if ft >= 1.0:
+                                self.npc_alpha = 255
+                            else:
+                                self.npc_alpha = int(255 * min(1.0, ft))
+                        else:
+                            if ft >= 1.0:
+                                self.npc_alpha = 0
+                            else:
+                                self.npc_alpha = int(255 * (1.0 - min(1.0, ft)))
+                except Exception:
+                    pass
+
+                # アニメーション中は位置を補間
+                if self.npc_animating:
+                    now = pygame.time.get_ticks()
+                    t = (now - self.npc_anim_start_time) / max(1, self.npc_anim_duration)
+                    if t >= 1.0:
+                        t = 1.0
+                        self.npc_animating = False
+                        self.npc_anim_completed = True
+                    ease = 1 - pow(1 - t, 3)
+                    img_x = int(self.npc_anim_start_x + (self.npc_anim_target_x - self.npc_anim_start_x) * ease)
+                else:
+                    margin = settings.SCREEN_WIDTH // 10
+                    img_x = settings.SCREEN_WIDTH - margin - img_w
+                # フェード時はアルファを適用して描画（alpha=0なら描画しない）
+                if self.npc_alpha <= 0:
+                    pass
+                else:
+                    try:
+                        temp = self.npc_image.copy()
+                        temp.set_alpha(self.npc_alpha)
+                        screen.blit(temp, (img_x, img_y))
+                    except Exception:
+                        screen.blit(self.npc_image, (img_x, img_y))
+                # 画面端補正
                 if img_x < 8:
                     img_x = 8
                 if img_x + img_w > settings.SCREEN_WIDTH - 8:
                     img_x = settings.SCREEN_WIDTH - img_w - 8
-                screen.blit(self.npc_image, (img_x, img_y))
 
             # テキストを折り返して表示（簡易実装）
             words = self.dialogue_text.split(' ')
@@ -152,6 +228,7 @@ class MapConversationView:
                 surf = self.font.render(line, True, settings.WHITE)
                 screen.blit(surf, (start_x, start_y + i * line_height))
 
-        finally:
-            # マップ会話時はここで必ず表示更新する
-            pygame.display.flip()
+        except Exception:
+            pass
+
+        # マップ会話ではここで表示更新を行わない（メインループで1回だけ行う）

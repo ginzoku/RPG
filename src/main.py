@@ -211,6 +211,12 @@ class GameController:
             except Exception:
                 pass
 
+            # 1フレーム分の描画を画面に反映
+            try:
+                pygame.display.flip()
+            except Exception:
+                pass
+
         pygame.quit()
         sys.exit()
 

@@ -63,6 +63,18 @@ class ConversationView:
                 self.npc_image = pygame.transform.smoothscale(img, (w, desired_h))
         except Exception:
             self.npc_image = None
+        # アニメーション用状態
+        self.npc_animating = False
+        self.npc_anim_start_x = 0
+        self.npc_anim_target_x = 0
+        self.npc_anim_start_time = 0
+        self.npc_anim_duration = 400  # ms
+        # フェード用
+        self.npc_alpha = 0
+        self.npc_fade_start_time = 0
+        self.npc_fade_duration = 200  # ms
+        self.npc_desired_visible = False
+        self.npc_anim_completed = False
     
     def _get_japanese_font(self, size: int) -> pygame.font.Font:
         font_paths = [
@@ -78,6 +90,32 @@ class ConversationView:
     def set_dialogue(self, speaker: str | None, text: str):
         self.speaker_name = speaker if speaker else ""
         self.dialogue_text = text
+        # NPC画像のスライドイン開始
+        try:
+            if self.speaker_name == '老人' and self.npc_image:
+                now = pygame.time.get_ticks()
+                img_w, img_h = self.npc_image.get_size()
+                margin = settings.SCREEN_WIDTH // 10
+                target_x = settings.SCREEN_WIDTH - margin - img_w
+                # 開始位置をさらに遠方にして画面外から入ってくる印象を強める
+                start_x = settings.SCREEN_WIDTH + img_w * 2 + (settings.SCREEN_WIDTH // 5)
+                self.npc_anim_start_x = start_x
+                self.npc_anim_target_x = target_x
+                self.npc_anim_start_time = now
+                self.npc_animating = True
+                self.npc_anim_completed = False
+                # フェードイン開始設定
+                self.npc_desired_visible = True
+                self.npc_fade_start_time = now
+                self.npc_alpha = 0
+            else:
+                # 非老人ならアニメーションを止め、フェードアウトを開始
+                now = pygame.time.get_ticks()
+                self.npc_desired_visible = False
+                self.npc_fade_start_time = now
+                self.npc_animating = False
+        except Exception:
+            self.npc_animating = False
 
     def set_choices(self, choices: list[str]):
         self.choices = choices
@@ -129,23 +167,52 @@ class ConversationView:
         pygame.draw.rect(screen, (0, 0, 0, 180), self.dialogue_box_rect, border_radius=10) # 半透明の黒
         pygame.draw.rect(screen, (255, 255, 255), self.dialogue_box_rect, 2, border_radius=10) # 枠線
 
-        # 話者が「老人」の場合、右上にNPC画像を表示
+        # 話者が「老人」の場合、右上にNPC画像を表示（フェード + スライドイン）
         try:
             if self.speaker_name == '老人' and self.npc_image:
-                pad = 8
                 img_w, img_h = self.npc_image.get_size()
-                # 画面を10分割したとき、画像の右端から画面右端まで1/10分の余白を確保する
-                margin = settings.SCREEN_WIDTH // 10
-                img_x = settings.SCREEN_WIDTH - margin - img_w
-                img_y = self.dialogue_box_rect.y - pad - img_h
-                # 画面外に出ないように調整
+                img_y = self.dialogue_box_rect.y - 8 - img_h
                 if img_y < 8:
                     img_y = 8
+
+                now = pygame.time.get_ticks()
+                # フェード処理を計算
+                if self.npc_fade_start_time:
+                    ft = (now - self.npc_fade_start_time) / max(1, self.npc_fade_duration)
+                    ft = max(0.0, min(1.0, ft))
+                    if self.npc_desired_visible:
+                        self.npc_alpha = int(255 * ft)
+                    else:
+                        self.npc_alpha = int(255 * (1.0 - ft))
+
+                # アニメーション中は位置を補間
+                if self.npc_animating:
+                    t = (now - self.npc_anim_start_time) / max(1, self.npc_anim_duration)
+                    if t >= 1.0:
+                        t = 1.0
+                        self.npc_animating = False
+                        self.npc_anim_completed = True
+                    # ease-out cubic
+                    ease = 1 - pow(1 - t, 3)
+                    img_x = int(self.npc_anim_start_x + (self.npc_anim_target_x - self.npc_anim_start_x) * ease)
+                else:
+                    margin = settings.SCREEN_WIDTH // 10
+                    img_x = settings.SCREEN_WIDTH - margin - img_w
+
+                # 画面端補正
                 if img_x < 8:
                     img_x = 8
                 if img_x + img_w > settings.SCREEN_WIDTH - 8:
                     img_x = settings.SCREEN_WIDTH - img_w - 8
-                screen.blit(self.npc_image, (img_x, img_y))
+
+                # フェード時はアルファを適用して描画（alpha=0なら描画しない）
+                if self.npc_alpha > 0:
+                    try:
+                        temp = self.npc_image.copy()
+                        temp.set_alpha(self.npc_alpha)
+                        screen.blit(temp, (img_x, img_y))
+                    except Exception:
+                        screen.blit(self.npc_image, (img_x, img_y))
         except Exception:
             pass
 
