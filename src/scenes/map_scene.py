@@ -42,6 +42,15 @@ class MapScene:
         ]
         
         self.collided_enemy = None # 衝突した敵
+        # UI フラグ: 右上アイコンで表示する黒いオーバーレイを制御
+        self.overlay_active = False
+        # フェード用アルファ値（0-255）。View 側で毎フレーム補間して更新する
+        self.overlay_alpha = 0
+        # オーバーレイ上のコンテンツをスクロールさせるためのオフセット（px）
+        # 現在のスクロール値（描画で補間される）
+        self.overlay_scroll = 0
+        # 目標スクロール値（コントローラが操作する）
+        self.overlay_scroll_target = 0
 
     def move_player(self, dx: int, dy: int):
         """プレイヤーを移動させる"""
