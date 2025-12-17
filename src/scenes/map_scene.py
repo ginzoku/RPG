@@ -4,6 +4,7 @@ from ..components.enemy_symbol import EnemySymbol # 修正
 from ..components.npc import Npc
 from ..config import settings
 from ..data.map_data import MAP_DATA
+from ..data.map_generator import generate as generate_map
 
 class MapScene:
     """マップの状態を管理するクラス"""
@@ -43,6 +44,7 @@ class MapScene:
         
         self.collided_enemy = None # 衝突した敵
         # UI フラグ: 右上アイコンで表示する黒いオーバーレイを制御
+        # UI フラグ: 右上アイコンで表示する黒いオーバーレイを制御（初期は非表示）
         self.overlay_active = False
         # フェード用アルファ値（0-255）。View 側で毎フレーム補間して更新する
         self.overlay_alpha = 0
@@ -51,6 +53,11 @@ class MapScene:
         self.overlay_scroll = 0
         # 目標スクロール値（コントローラが操作する）
         self.overlay_scroll_target = 0
+        # generate node-based map according to rules for drawing
+        try:
+            self.map_graph = generate_map()
+        except Exception:
+            self.map_graph = None
 
     def move_player(self, dx: int, dy: int):
         """プレイヤーを移動させる"""

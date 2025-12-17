@@ -12,16 +12,26 @@ class MapController:
             if event.type == pygame.MOUSEWHEEL:
                 if getattr(map_scene, 'overlay_active', False):
                     # 上方向スクロールは event.y > 0
-                    scroll_step = 30
+                    scroll_step = 60
                     cur = int(getattr(map_scene, 'overlay_scroll', 0) or 0)
-                    # コンテンツ高さと表示領域を MapView と同じ計算で導出してクランプ
-                    count = 15
-                    sq = 36
-                    spacing = 84
-                    top_margin = 80
-                    total_height = count * sq + (count - 1) * spacing
-                    visible = settings.SCREEN_HEIGHT - top_margin - 40
-                    max_scroll = max(0, total_height - visible)
+                    # if we have a generated graph, calculate content height similarly to MapView
+                    graph = getattr(map_scene, 'map_graph', None)
+                    if graph:
+                        count = len(graph)
+                        # match MapView: large fixed spacing so rows are far apart
+                        level_margin = 100
+                        level_spacing = 200
+                        content_height = level_margin * 2 + (count - 1) * level_spacing
+                        visible = settings.SCREEN_HEIGHT
+                    else:
+                        # fallback to previous chain assumptions
+                        count = 15
+                        sq = 44
+                        spacing = 84
+                        top_margin = 140
+                        content_height = top_margin * 2 + (count - 1) * spacing
+                        visible = settings.SCREEN_HEIGHT
+                    max_scroll = max(0, int(content_height - visible))
                     new = cur - event.y * scroll_step
                     if new < 0:
                         new = 0
@@ -33,16 +43,24 @@ class MapController:
             # Some platforms use MOUSEBUTTONDOWN with button 4/5 for wheel
             if event.type == pygame.MOUSEBUTTONDOWN and event.button in (4, 5):
                 if getattr(map_scene, 'overlay_active', False):
-                    scroll_step = 30
+                    scroll_step = 60
                     direction = 1 if event.button == 4 else -1
                     cur = int(getattr(map_scene, 'overlay_scroll', 0) or 0)
-                    count = 15
-                    sq = 36
-                    spacing = 84
-                    top_margin = 80
-                    total_height = count * sq + (count - 1) * spacing
-                    visible = settings.SCREEN_HEIGHT - top_margin - 40
-                    max_scroll = max(0, total_height - visible)
+                    graph = getattr(map_scene, 'map_graph', None)
+                    if graph:
+                        count = len(graph)
+                        level_margin = 100
+                        level_spacing = 200
+                        content_height = level_margin * 2 + (count - 1) * level_spacing
+                        visible = settings.SCREEN_HEIGHT
+                    else:
+                        count = 15
+                        sq = 44
+                        spacing = 84
+                        top_margin = 140
+                        content_height = top_margin * 2 + (count - 1) * spacing
+                        visible = settings.SCREEN_HEIGHT
+                    max_scroll = max(0, int(content_height - visible))
                     new = cur - direction * scroll_step
                     if new < 0:
                         new = 0
