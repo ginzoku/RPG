@@ -529,6 +529,77 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                             if rc in children_by_parent.get(right, []):
                                 children_by_parent[right].remove(rc)
 
+    # Additional post-process pass: repeatedly detect and remove bridge-induced crossings
+    # (lvl -> lvl+1 -> lvl+2) by removing one parent->bridge edge when safe.
+    # Repeat until no changes to ensure multi-edge cases are resolved.
+    any_changed = True
+    while any_changed:
+        any_changed = False
+        for lvl in range(0, LEVELS - 2):
+            row = graph[lvl]
+            next_row = graph[lvl + 1]
+            next2 = graph[lvl + 2]
+            # position map for grandchildren
+            pos_map2 = {n['id']: i for i, n in enumerate(next2)}
+            # build children_by_parent for row -> next_row
+            children_by_parent = {n['id']: [] for n in row}
+            for child in next_row:
+                for p in child.get('parents', []):
+                    if p in children_by_parent:
+                        children_by_parent[p].append(child['id'])
+            # build children_by_parent for next_row -> next2
+            children_by_parent_lvl1 = {n['id']: [] for n in next_row}
+            for child in next2:
+                for p in child.get('parents', []):
+                    if p in children_by_parent_lvl1:
+                        children_by_parent_lvl1[p].append(child['id'])
+
+            # check adjacent parent pairs
+            for i in range(len(row) - 1):
+                left = row[i]['id']
+                right = row[i + 1]['id']
+                left_children = list(children_by_parent.get(left, []))
+                right_children = list(children_by_parent.get(right, []))
+                if not left_children or not right_children:
+                    continue
+                removed_in_this_lvl = False
+                for lc in left_children:
+                    for rc in right_children:
+                        left_gcs = children_by_parent_lvl1.get(lc, [])
+                        right_gcs = children_by_parent_lvl1.get(rc, [])
+                        if not left_gcs or not right_gcs:
+                            continue
+                        crossed = False
+                        for lg in left_gcs:
+                            for rg in right_gcs:
+                                if lg in pos_map2 and rg in pos_map2 and pos_map2[lg] > pos_map2[rg]:
+                                    crossed = True
+                                    break
+                            if crossed:
+                                break
+                        if not crossed:
+                            continue
+
+                        # try deterministic removal: prefer left->lc then right->rc
+                        def remove_parent(parent_id, child_id):
+                            for n in next_row:
+                                if n['id'] == child_id:
+                                    parents = n.get('parents', [])
+                                    if parent_id in parents and len(parents) > 1:
+                                        parents.remove(parent_id)
+                                        return True
+                            return False
+
+                        if remove_parent(left, lc) or remove_parent(right, rc):
+                            any_changed = True
+                            removed_in_this_lvl = True
+                            break
+                    if removed_in_this_lvl:
+                        break
+                if removed_in_this_lvl:
+                    # we modified parents; break to outer while to recompute maps
+                    break
+
     # Assign types according to MAP_LOGIC probabilities with constraints.
     # Base probabilities (per-node): monster 30%, elite 15%, event 32%, shop 8%, rest 15%
     levels_map = build_levels_map(graph)
@@ -1325,6 +1396,47 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         for n in graph[lvl]:
             if 'type' not in n or n['type'] is None:
                 n['type'] = 'monster'
+
+    # Safety fix: ensure no non-start node is parentless and no non-boss node is childless.
+    # For any node (except start row) that has no parents, attach it to the nearest node in the previous row.
+    # For any node (except boss row) that has no children, attach it as a parent to the nearest node in the next row.
+    id_to_node = {n['id']: n for lvl_nodes in graph for n in lvl_nodes}
+    children = {nid: [] for nid in id_to_node}
+    for lvl_idx, lvl_nodes in enumerate(graph):
+        for n in lvl_nodes:
+            for p in n.get('parents', []):
+                if p in children:
+                    children[p].append(n['id'])
+
+    LEVELS = len(graph)
+    # fix parentless (shouldn't happen but be defensive)
+    for lvl_idx in range(1, LEVELS):
+        row = graph[lvl_idx]
+        prev_row = graph[lvl_idx - 1]
+        for i, n in enumerate(row):
+            if not n.get('parents'):
+                # attach to nearest node in prev_row by column index
+                if prev_row:
+                    j = min(range(len(prev_row)), key=lambda x: abs(x - i))
+                    prev_id = prev_row[j]['id']
+                    n.setdefault('parents', []).append(prev_id)
+                    children.setdefault(prev_id, []).append(n['id'])
+
+    # fix childless nodes (except boss row)
+    for lvl_idx in range(0, LEVELS - 1):
+        row = graph[lvl_idx]
+        next_row = graph[lvl_idx + 1]
+        for i, n in enumerate(row):
+            nid = n['id']
+            if not children.get(nid):
+                # attach to nearest node in next_row by column index
+                if next_row:
+                    j = min(range(len(next_row)), key=lambda x: abs(x - i))
+                    target = next_row[j]
+                    # avoid duplicate parent entries
+                    if nid not in target.get('parents', []):
+                        target.setdefault('parents', []).append(nid)
+                        children.setdefault(nid, []).append(target['id'])
 
     return graph
 
