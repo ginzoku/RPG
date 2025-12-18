@@ -217,7 +217,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     return sum(1 for c in next_level_nodes if node_id in c.get('parents', []))
 
                 # Prevent very long pure-linear runs (no branch/no-merge) of length LINEAR_RUN
-                LINEAR_RUN = 4
+                LINEAR_RUN = 3
                 for start_lvl in range(1, max(1, LEVELS - LINEAR_RUN - 1)):
                     end_lvl = start_lvl + LINEAR_RUN - 1
                     target_lvl = end_lvl + 1
@@ -444,20 +444,52 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         next_row = graph[lvl + 1]
         # build parent index map for current row
         idx_map = {n['id']: i for i, n in enumerate(row)}
-        # compute key for each node in next_row as min index of its parents (fallback large)
-        def parent_key(node):
+
+        # compute representative parent position (barycenter) for each child
+        BIG = 1_000_000
+        def parent_rep(node):
             ps = node.get('parents', [])
-            keys = sorted(idx_map.get(p, 1_000_000) for p in ps)
+            keys = [idx_map.get(p, BIG) for p in ps]
             if not keys:
-                return (1_000_000, 1_000_000, 1_000_000)
-            # prioritize min parent index, then median, then max as tiebreakers
-            mn = keys[0]
-            md = keys[len(keys) // 2]
-            mx = keys[-1]
-            return (mn, md, mx)
-        # stable sort next_row by parent_key to ensure monotonic parent positions
-        sorted_next = sorted(next_row, key=parent_key)
-        # if ordering changed, apply
+                return (BIG, BIG, BIG)
+            mn = min(keys)
+            mx = max(keys)
+            avg = sum(keys) / len(keys)
+            return (avg, mn, mx)
+
+        # initial sort by barycenter (avg), then min, then max
+        sorted_next = sorted(next_row, key=lambda n: parent_rep(n))
+
+        # local improvement: try adjacent swaps if they reduce crossings between row and next_row
+        def count_inversions(order):
+            # order: list of child nodes; compute parent_reps in that order and count inversions
+            reps = [parent_rep(n)[1] for n in order]  # use min parent index for inversion test
+            inv = 0
+            for i in range(len(reps)):
+                for j in range(i + 1, len(reps)):
+                    if reps[i] > reps[j]:
+                        inv += 1
+            return inv
+
+        improved = True
+        # limit iterations to avoid pathological loops
+        iter_limit = max(10, len(sorted_next) * 3)
+        it = 0
+        while improved and it < iter_limit:
+            improved = False
+            it += 1
+            for i in range(len(sorted_next) - 1):
+                cur_inv = count_inversions(sorted_next)
+                # test swap
+                sorted_next[i], sorted_next[i + 1] = sorted_next[i + 1], sorted_next[i]
+                new_inv = count_inversions(sorted_next)
+                if new_inv < cur_inv:
+                    improved = True
+                    break
+                # revert
+                sorted_next[i], sorted_next[i + 1] = sorted_next[i + 1], sorted_next[i]
+
+        # apply ordering
         if sorted_next != next_row:
             graph[lvl + 1] = sorted_next
 
@@ -538,6 +570,18 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     cur = get_node_by_id(parents[0])
                 return length
 
+            # compute consecutive events along a single-parent chain (take max over parents)
+            def consecutive_events_from_parent(pid):
+                length = 0
+                cur = get_node_by_id(pid)
+                while cur is not None and cur.get('type') == 'event':
+                    length += 1
+                    parents = cur.get('parents', [])
+                    if not parents:
+                        break
+                    cur = get_node_by_id(parents[0])
+                return length
+
             # boost rest likelihood if this node follows long monster runs or an elite parent
             if 'rest' in weights:
                 # check each parent chain for long monster runs
@@ -584,6 +628,16 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 if t in ('elite', 'rest', 'shop') and not can_be_nonconsecutive(n, t):
                     # demote to zero weight if it would violate non-consecutive rule
                     continue
+                # prevent creating a 4th consecutive 'event' along a single-parent chain
+                if t == 'event':
+                    max_event_run = 0
+                    for pid in n.get('parents', []):
+                        run = consecutive_events_from_parent(pid)
+                        if run > max_event_run:
+                            max_event_run = run
+                    # if upstream run is already 3 or more, disallow another event (limit to 3)
+                    if max_event_run >= 3:
+                        continue
                 final_choices.append(t)
                 final_weights.append(w)
 
@@ -1157,6 +1211,62 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         for n in graph[lvl]:
             if 'type' not in n or n['type'] is None:
                 n['type'] = 'monster'
+
+    # Post-process: enforce maximum consecutive 'event' nodes along any start->boss path
+    def enforce_max_consecutive_events(graph, cap=3):
+        id_to_node = {n['id']: n for lvl in graph for n in lvl}
+        children = {nid: [] for nid in id_to_node}
+        for lvl_nodes in graph:
+            for n in lvl_nodes:
+                for p in n.get('parents', []):
+                    if p in children:
+                        children[p].append(n['id'])
+
+        changed = True
+        while changed:
+            changed = False
+
+            def dfs(nid, cur_run, visited):
+                nonlocal changed
+                if nid in visited:
+                    return
+                visited.add(nid)
+                node = id_to_node.get(nid)
+                if node is None:
+                    visited.remove(nid)
+                    return
+                if node.get('type') == 'event':
+                    cur_run += 1
+                else:
+                    cur_run = 0
+                if cur_run > cap:
+                    # convert this node to monster if allowed
+                    if node.get('type') not in ('start', 'boss', 'rest', 'treasure'):
+                        node['type'] = 'monster'
+                        changed = True
+                        visited.remove(nid)
+                        return
+                if node.get('type') == 'boss':
+                    visited.remove(nid)
+                    return
+                for c in children.get(nid, []):
+                    dfs(c, cur_run, visited)
+                visited.remove(nid)
+
+            for s in graph[0]:
+                dfs(s['id'], 0, set())
+
+            if changed:
+                # rebuild maps to reflect modifications
+                id_to_node = {n['id']: n for lvl in graph for n in lvl}
+                children = {nid: [] for nid in id_to_node}
+                for lvl_nodes in graph:
+                    for n in lvl_nodes:
+                        for p in n.get('parents', []):
+                            if p in children:
+                                children[p].append(n['id'])
+
+    enforce_max_consecutive_events(graph, cap=3)
 
     return graph
 
