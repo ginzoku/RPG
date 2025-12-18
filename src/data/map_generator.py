@@ -14,17 +14,17 @@ from typing import List, Dict
 
 def get_default_params() -> Dict:
     return {
-        'LEVELS': 17,
+        'LEVELS': 16,
         'MAX_PER_ROW': 5,
         # start row weights for [1,2,3] counts (percent)
         'start_weights': [10, 35, 55],
         # per-node type probabilities (used for lvl >= 5 rows)
         'type_probs': {'monster': 37, 'elite': 10, 'event': 30, 'shop': 8, 'rest': 15},
         # early rows (lvl < 4) allowed distribution
-        'early_probs': {'monster': 50, 'event': 40, 'shop': 10},
+        'early_probs': {'monster': 40, 'event': 45, 'shop': 15},
         # fixed special rows (0-based indices)
-        'rest_rows': [5, 16],
-        'treasure_rows': [6],
+        'rest_rows': [5, 14],
+        'treasure_rows': [9],
         # placement caps (excluding fixed/guaranteed placements)
         'REST_CAP': 6,
         'ELITE_EXTRA_CAP': 3,
@@ -221,19 +221,19 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 continue
 
         if lvl in TREASURE_ROWS:
-            # Treasure row should not branch from rest: prefer one-to-one mapping from prev rest nodes.
-            # If there are more prev nodes than MAX_PER_ROW, group adjacent parents into MAX_PER_ROW groups.
-            if prev_count <= MAX_PER_ROW:
+            # Treasure row: prefer one-to-one mapping from previous nodes when there are <=3 parents.
+            # If the previous row has more than 3 nodes, merge adjacent parents until exactly 3 remain,
+            # similar to how rest rows are handled.
+            if prev_count <= 3:
                 for p in prev:
                     row.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': 'treasure'})
                     nid += 1
             else:
-                # Reduce prev nodes to MAX_PER_ROW by repeatedly merging adjacent pairs (pairwise merges only).
+                # start by making one node per previous parent, then merge down to 3
                 temp = []
                 for p in prev:
                     temp.append({'id': None, 'parents': [p['id']]})
-                # reduce to MAX_PER_ROW using non-overlapping pairwise merges
-                need = len(temp) - MAX_PER_ROW
+                need = len(temp) - 3
                 if need > 0:
                     temp, nid = pairwise_merge_k(temp, need, nid)
                 # finalize rows
@@ -268,8 +268,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     graph[-1].append(new_node)
             continue
 
-        # Normal growth: each parent spawns 1-3 children (weighted)
-        # Normal growth: each parent spawns 1-3 children (weighted)
+        # Normal growth: each parent spawns 1-2 children (weighted)
+        # (Disallow spawn of 3 children from a single parent.)
         for p in prev:
             # determine if this branch has already reached target width; if not, boost branching
             def branch_reached_width(pid, target):
@@ -291,12 +291,11 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             first_cut = 0.6
             if not branch_reached_width(p['id'], BRANCH_WIDTH_TARGET):
                 first_cut = max(0.0, 0.6 - BRANCH_BOOST_PROB)
+            # choose between 1 or 2 children only
             if rr < first_cut:
                 c = 1
-            elif rr < 0.9:
-                c = 2
             else:
-                c = 3
+                c = 2
             for _ in range(c):
                 row.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': 'normal'})
                 nid += 1
