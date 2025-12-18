@@ -19,9 +19,9 @@ def get_default_params() -> Dict:
         # start row weights for [1,2,3] counts (percent)
         'start_weights': [10, 35, 55],
         # per-node type probabilities (used for lvl >= 5 rows)
-        'type_probs': {'monster': 37, 'elite': 10, 'event': 30, 'shop': 8, 'rest': 15},
+        'type_probs': {'monster': 35, 'elite': 10, 'event': 32, 'shop': 8, 'rest': 15},
         # early rows (lvl < 4) allowed distribution
-        'early_probs': {'monster': 45, 'event': 45, 'shop': 10},
+        'early_probs': {'monster': 50, 'event': 40, 'shop': 10},
         # fixed special rows (0-based indices)
         'rest_rows': [5, 14],
         'treasure_rows': [9],
