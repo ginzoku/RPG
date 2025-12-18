@@ -709,6 +709,33 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
     first_rest_level = min(REST_ROWS) if REST_ROWS else LEVELS
     # build id->node map for ancestor checks
     id_to_node_pre = {n['id']: n for lvl in graph for n in lvl}
+    # build children map for skip-time descendant checks
+    id_to_node_pre = {n['id']: n for lvl in graph for n in lvl}
+    children_pre = {nid: [] for nid in id_to_node_pre}
+    for lvl_nodes in graph:
+        for n in lvl_nodes:
+            for p in n.get('parents', []):
+                if p in children_pre:
+                    children_pre[p].append(n['id'])
+
+    def has_descendant_rest(nid):
+        # DFS/BFS to find any descendant of nid that is a rest
+        stack = list(children_pre.get(nid, []))
+        seen = set()
+        while stack:
+            cid = stack.pop()
+            if cid in seen:
+                continue
+            seen.add(cid)
+            cn = id_to_node_pre.get(cid)
+            if cn is not None and cn.get('type') == 'rest':
+                return True
+            # push children
+            for cc in children_pre.get(cid, []):
+                if cc not in seen:
+                    stack.append(cc)
+        return False
+
     for lvl in range(1, LEVELS - 1):
         for node in list(graph[lvl]):
             if node.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
@@ -732,6 +759,17 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                         parent_empty = True
                         break
             if parent_empty:
+                continue
+            # avoid creating pattern: rest -> (this node empty) -> rest
+            # if any ancestor is rest AND any descendant is rest, disallow skipping
+            ancestor_has_rest = False
+            anc_ids = build_ancestors(node, levels_map)
+            for aid in anc_ids:
+                an = id_to_node_pre.get(aid)
+                if an is not None and an.get('type') == 'rest':
+                    ancestor_has_rest = True
+                    break
+            if ancestor_has_rest and has_descendant_rest(node['id']):
                 continue
             if random.random() < SKIP_PROB:
                 node['_orig_type'] = node.get('type')
@@ -800,10 +838,18 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             idx -= 1
 
         # Ensure at least 2 skips remain in the final graph (best-effort without violating min_required)
+        # Count current empties in low/high regions
         current_skips = sum(1 for lvl in graph for n in lvl if n.get('type') == 'empty')
-        if current_skips < 2:
+        low_skips = sum(1 for lvl_idx, lvl in enumerate(graph) for n in lvl if n.get('type') == 'empty' and lvl_idx < first_rest_level)
+        high_skips = sum(1 for lvl_idx, lvl in enumerate(graph) for n in lvl if n.get('type') == 'empty' and lvl_idx >= first_rest_level)
+        # Ensure at least one empty in low and one in high (best-effort without violating min_required)
+        # We'll attempt to add missing empties per-region.
+        need_low = 1 if low_skips < 1 else 0
+        need_high = 1 if high_skips < 1 else 0
+        if need_low or need_high:
             # candidates: nodes that are not special/locked and currently non-empty
-            candidates = []
+            candidates_low = []
+            candidates_high = []
             for lvl_idx in range(1, LEVELS - 1):
                 for n in graph[lvl_idx]:
                     if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
@@ -826,22 +872,210 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                             break
                     if parent_empty:
                         continue
-                    candidates.append(n)
-            random.shuffle(candidates)
-            for cand in candidates:
-                if current_skips >= 2:
-                    break
-                orig = cand.get('type')
-                cand['type'] = 'empty'
-                new_cost = compute_min_cost()
-                if new_cost < min_required:
-                    # revert
+                    # split into low/high relative to first_rest_level
+                    if lvl_idx < first_rest_level:
+                        candidates_low.append(n)
+                    else:
+                        candidates_high.append(n)
+
+            random.shuffle(candidates_low)
+            random.shuffle(candidates_high)
+
+            def try_place_one(lst, force=False):
+                nonlocal current_skips
+                best_candidate = None
+                best_cost = -1
+                for cand in lst:
+                    orig = cand.get('type')
+                    cand['type'] = 'empty'
+                    new_cost = compute_min_cost()
+                    if new_cost >= min_required:
+                        current_skips += 1
+                        return True
+                    # collect best (least harmful) candidate when forcing
+                    if force:
+                        if new_cost > best_cost:
+                            best_cost = new_cost
+                            best_candidate = cand
+                    # revert temporary change
                     cand['type'] = orig
+                if force and best_candidate is not None:
+                    # place the best candidate even if it violates min_required
+                    best_candidate['_orig_type'] = best_candidate.get('_orig_type', best_candidate.get('type'))
+                    best_candidate['type'] = 'empty'
+                    current_skips += 1
+                    return True
+                return False
+
+            # place low if needed
+            if need_low:
+                placed = try_place_one(candidates_low, force=False)
+                if not placed:
+                    # try forced placement
+                    placed = try_place_one(candidates_low, force=True)
+                if placed:
+                    need_low = 0
+            # place high if needed
+            if need_high:
+                placed = try_place_one(candidates_high, force=False)
+                if not placed:
+                    placed = try_place_one(candidates_high, force=True)
+                if placed:
+                    need_high = 0
+            # if still missing a high skip, try moving an existing low skip to high (restore low, then place high)
+            if need_high:
+                low_empties = [n for lvl_idx, lvl in enumerate(graph) for n in lvl if n.get('type') == 'empty' and lvl_idx < first_rest_level]
+                moved = False
+                for low_node in low_empties:
+                    # attempt to restore low node
+                    orig = low_node.pop('_orig_type', low_node.get('type', 'monster'))
+                    low_node['type'] = orig
+                    new_cost = compute_min_cost()
+                    if new_cost < min_required:
+                        # revert
+                        low_node['type'] = 'empty'
+                        low_node['_orig_type'] = orig
+                        continue
+                    # now try to place in high
+                    if try_place_one(candidates_high, force=False) or try_place_one(candidates_high, force=True):
+                        moved = True
+                        need_high = 0
+                        break
+                    # revert if placement failed
+                    low_node['type'] = 'empty'
+                    low_node['_orig_type'] = orig
+                # end moving loop
+            # fallback: if after attempts we still have fewer than 2 skips, fill from any candidates until 2
+            current_skips = sum(1 for lvl in graph for n in lvl if n.get('type') == 'empty')
+            if current_skips < 2:
+                combined = candidates_low + candidates_high
+                for cand in combined:
+                    if current_skips >= 2:
+                        break
+                    orig = cand.get('type')
+                    cand['type'] = 'empty'
+                    new_cost = compute_min_cost()
+                    if new_cost < min_required:
+                        cand['type'] = orig
+                        continue
+                    current_skips += 1
+
+            # New policy: do NOT force any skips in low layers.
+            # Instead, ensure two skips exist in the high region (lvl >= first_rest_level).
+            high_skips = [(lvl_idx, n) for lvl_idx, lvl in enumerate(graph) for n in lvl if n.get('type') == 'empty' and lvl_idx >= first_rest_level]
+            need = max(0, 2 - len(high_skips))
+            if need > 0:
+                placed = 0
+                for lvl_idx in range(max(1, first_rest_level), LEVELS - 1):
+                    for n in graph[lvl_idx]:
+                        if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
+                            continue
+                        n['_orig_type'] = n.get('type')
+                        n['type'] = 'empty'
+                        placed += 1
+                        if placed >= need:
+                            break
+                    if placed >= need:
+                        break
+                # final fallback: if still not enough, convert any remaining non-special nodes in high region
+                if placed < need:
+                    for lvl_idx in range(max(1, first_rest_level), LEVELS - 1):
+                        for n in graph[lvl_idx]:
+                            if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
+                                continue
+                            if n.get('type') != 'empty':
+                                n['_orig_type'] = n.get('type')
+                                n['type'] = 'empty'
+                                placed += 1
+                                if placed >= need:
+                                    break
+                        if placed >= need:
+                            break
+
+        # Post-skip cleanup: prevent pattern rest -> empty -> rest by restoring the middle node
+        # Build id->node and children maps for checks
+        id_to_node_cleanup = {n['id']: n for lvl in graph for n in lvl}
+        children_cleanup = {nid: [] for nid in id_to_node_cleanup}
+        for lvl_nodes in graph:
+            for n in lvl_nodes:
+                for p in n.get('parents', []):
+                    if p in children_cleanup:
+                        children_cleanup[p].append(n['id'])
+
+        def has_descendant_rest_cleanup(nid):
+            stack = list(children_cleanup.get(nid, []))
+            seen = set()
+            while stack:
+                cid = stack.pop()
+                if cid in seen:
                     continue
-                current_skips += 1
-            # end candidates loop
+                seen.add(cid)
+                cn = id_to_node_cleanup.get(cid)
+                if cn is not None and cn.get('type') == 'rest':
+                    return True
+                stack.extend(children_cleanup.get(cid, []))
+            return False
+
+        def ancestors_cleanup(node):
+            anc = set()
+            stack = list(node.get('parents', []))
+            while stack:
+                pid = stack.pop()
+                if pid in anc:
+                    continue
+                anc.add(pid)
+                p = id_to_node_cleanup.get(pid)
+                if p:
+                    stack.extend(p.get('parents', []))
+            return anc
+
+        # restore empty nodes that connect two rest nodes along any branch
+        for lvl in range(1, LEVELS - 1):
+            for node in graph[lvl]:
+                if node.get('type') != 'empty':
+                    continue
+                anc_ids = ancestors_cleanup(node)
+                if any(id_to_node_cleanup.get(a, {}).get('type') == 'rest' for a in anc_ids) and has_descendant_rest_cleanup(node['id']):
+                    # restore original type if known, else monster
+                    node['type'] = node.pop('_orig_type', 'monster')
+                    # also remove from skipped_nodes list if present
+                    # (not critical but keeps skipped_nodes consistent)
+                    for srec in list(skipped_nodes):
+                        if srec.get('id') == node['id']:
+                            skipped_nodes.remove(srec)
 
     # Final pass: convert any remaining unknowns to monster
+    # Ensure forced high-region empties even if no probabilistic skips occurred
+    first_rest = first_rest_level
+    high_empties = [(lvl_idx, n) for lvl_idx, lvl in enumerate(graph) for n in lvl if n.get('type') == 'empty' and lvl_idx >= first_rest]
+    if len(high_empties) < 2:
+        need = 2 - len(high_empties)
+        placed = 0
+        for lvl_idx in range(max(1, first_rest), LEVELS - 1):
+            for n in graph[lvl_idx]:
+                if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
+                    continue
+                n['_orig_type'] = n.get('type')
+                n['type'] = 'empty'
+                placed += 1
+                if placed >= need:
+                    break
+            if placed >= need:
+                break
+        # final fallback across whole graph
+        if placed < need:
+            for lvl_idx in range(1, LEVELS - 1):
+                for n in graph[lvl_idx]:
+                    if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
+                        continue
+                    n['_orig_type'] = n.get('type')
+                    n['type'] = 'empty'
+                    placed += 1
+                    if placed >= need:
+                        break
+                if placed >= need:
+                    break
+
     for lvl in range(1, LEVELS - 1):
         for n in graph[lvl]:
             if 'type' not in n or n['type'] is None:
