@@ -23,7 +23,7 @@ def get_default_params() -> Dict:
         # early rows (lvl < 4) allowed distribution
         'early_probs': {'monster': 50, 'event': 42, 'shop': 8},
         # fixed special rows (0-based indices)
-        'rest_rows': [5, 14],
+        'rest_rows': [5],
         'treasure_rows': [9],
         # placement caps (excluding fixed/guaranteed placements)
         'REST_CAP': 5,
@@ -69,6 +69,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
     ELITE_EXTRA_CAP = params['ELITE_EXTRA_CAP']
     SHOP_EXTRA_CAP = params['SHOP_EXTRA_CAP']
 
+    # Ensure the row immediately before the boss is always a rest row
+    REST_ROWS = sorted(set(REST_ROWS) | {max(0, LEVELS - 2)})
     PRE_REST_ROWS = [r - 1 for r in REST_ROWS]
 
     # tuning params
