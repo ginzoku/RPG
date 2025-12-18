@@ -21,7 +21,7 @@ def get_default_params() -> Dict:
         # per-node type probabilities (used for lvl >= 5 rows)
         'type_probs': {'monster': 37, 'elite': 10, 'event': 30, 'shop': 8, 'rest': 15},
         # early rows (lvl < 4) allowed distribution
-        'early_probs': {'monster': 40, 'event': 45, 'shop': 15},
+        'early_probs': {'monster': 45, 'event': 45, 'shop': 10},
         # fixed special rows (0-based indices)
         'rest_rows': [5, 14],
         'treasure_rows': [9],
@@ -32,7 +32,7 @@ def get_default_params() -> Dict:
         # branch/boost tuning
         'ENFORCE_MONSTER_THRESHOLD': 3,
         'BRANCH_MONSTER_THRESHOLD': 3,
-        'REST_BOOST_MON_RUN': 0.25,
+        'REST_BOOST_MON_RUN': 0.5,
         'REST_BOOST_AFTER_ELITE': 0.15,
         'REST_BOOST_NO_REST_LEVEL': 8,
         'REST_BOOST_NO_REST_AMOUNT': 0.20,
@@ -610,7 +610,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 target_idx = last_idx + 1
                 if 0 <= target_idx < len(path_ids):
                     target_node = id_to_node[path_ids[target_idx]]
-                    if target_node.get('type') not in locked:
+                    # Do not enforce monsters on early rows (levels 0-3)
+                    if target_node.get('type') not in locked and target_node.get('level', 0) >= 4:
                         target_node['type'] = 'monster'
                         # after insertion, reset last_idx to target_idx
                         last_idx = target_idx
