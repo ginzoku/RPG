@@ -4,7 +4,7 @@ from ..config import settings
 from ..scenes.map_scene import MapScene # 修正
 
 # Toggle node expected-score display here (set False to disable)
-SHOW_NODE_SCORES = True
+SHOW_NODE_SCORES = False
 
 class MapView:
     """マップを描画するクラス"""

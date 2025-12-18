@@ -21,7 +21,7 @@ def get_default_params() -> Dict:
         # per-node type probabilities (used for lvl >= 5 rows)
         'type_probs': {'monster': 35, 'elite': 10, 'event': 32, 'shop': 8, 'rest': 15},
         # early rows (lvl < 4) allowed distribution
-        'early_probs': {'monster': 50, 'event': 40, 'shop': 10},
+        'early_probs': {'monster': 45, 'event': 43, 'shop': 8},
         # fixed special rows (0-based indices)
         'rest_rows': [5, 14],
         'treasure_rows': [9],
@@ -487,11 +487,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 any_parent_has_rest = any(branch_has_rest(pid) for pid in n.get('parents', [])) if n.get('parents') else False
                 if not any_parent_has_rest and lvl >= REST_BOOST_NO_REST_LEVEL:
                     rest_boost += REST_BOOST_NO_REST_AMOUNT  # small extra boost for long-no-rest branches
-                # small penalty if any immediate parent is a treasure (make rest less likely)
-                if any(get_node_by_id(pid) is not None and get_node_by_id(pid).get('type') == 'treasure' for pid in n.get('parents', [])):
-                    weights['rest'] = weights['rest'] * REST_PENALTY_AFTER_TREASURE * rest_boost
-                else:
-                    weights['rest'] = weights['rest'] * rest_boost
+                # Do not penalize rest if immediate parent is treasure: apply uniform boost
+                weights['rest'] = weights['rest'] * rest_boost
 
             # enforce non-consecutive rule for elite/rest by disallowing picks that violate it
             # convert weights to lists for sampling
