@@ -103,6 +103,109 @@ class MapView:
                     # build id->node map for quick type checks when drawing
                     id_to_node = {n['id']: n for lvl_nodes in graph for n in lvl_nodes}
 
+                # Layout pass: detect visual crossings and swap horizontal positions to avoid them.
+                # This adjusts only `node_positions` (view), not the graph topology.
+                # Repeat a few times to resolve cascading swaps.
+                ITER_LIMIT = 2
+                it = 0
+                while it < ITER_LIMIT:
+                    it += 1
+                    changed = False
+                    LEVELS_G = len(graph)
+                    # direct crossings between lvl -> lvl+1
+                    for lvl in range(0, LEVELS_G - 1):
+                        row = graph[lvl]
+                        next_row = graph[lvl + 1]
+                        # order next_row by current x position
+                        def xpos(nid):
+                            return node_positions.get(nid, (0, 0))[0]
+                        next_order = sorted([n['id'] for n in next_row], key=xpos)
+                        pos_idx = {nid: i for i, nid in enumerate(next_order)}
+                        # build children_by_parent for this adjacency
+                        children_by_parent = {n['id']: [] for n in row}
+                        for child in next_row:
+                            for p in child.get('parents', []):
+                                if p in children_by_parent:
+                                    children_by_parent[p].append(child['id'])
+                        for i in range(len(row) - 1):
+                            left = row[i]['id']
+                            right = row[i + 1]['id']
+                            left_children = children_by_parent.get(left, [])
+                            right_children = children_by_parent.get(right, [])
+                            if not left_children or not right_children:
+                                continue
+                            for lc in left_children:
+                                for rc in right_children:
+                                    if lc in pos_idx and rc in pos_idx and pos_idx[lc] > pos_idx[rc]:
+                                        # swap x positions of the two child nodes to fix crossing
+                                        x_l, y_l = node_positions.get(lc, (0, 0))
+                                        x_r, y_r = node_positions.get(rc, (0, 0))
+                                        node_positions[lc] = (x_r, y_l)
+                                        node_positions[rc] = (x_l, y_r)
+                                        changed = True
+                                        break
+                                if changed:
+                                    break
+                            if changed:
+                                break
+                        if changed:
+                            break
+                    if changed:
+                        continue
+
+                    # bridge crossings lvl -> lvl+1 -> lvl+2
+                    for lvl in range(0, LEVELS_G - 2):
+                        row = graph[lvl]
+                        next_row = graph[lvl + 1]
+                        next2 = graph[lvl + 2]
+                        def xpos2(nid):
+                            return node_positions.get(nid, (0, 0))[0]
+                        order2 = sorted([n['id'] for n in next2], key=xpos2)
+                        pos2 = {nid: i for i, nid in enumerate(order2)}
+                        children_by_parent = {n['id']: [] for n in row}
+                        for child in next_row:
+                            for p in child.get('parents', []):
+                                if p in children_by_parent:
+                                    children_by_parent[p].append(child['id'])
+                        children_by_parent_lvl1 = {n['id']: [] for n in next_row}
+                        for child in next2:
+                            for p in child.get('parents', []):
+                                if p in children_by_parent_lvl1:
+                                    children_by_parent_lvl1[p].append(child['id'])
+                        for i in range(len(row) - 1):
+                            left = row[i]['id']
+                            right = row[i + 1]['id']
+                            for lc in children_by_parent.get(left, []):
+                                for rc in children_by_parent.get(right, []):
+                                    left_gcs = children_by_parent_lvl1.get(lc, [])
+                                    right_gcs = children_by_parent_lvl1.get(rc, [])
+                                    if not left_gcs or not right_gcs:
+                                        continue
+                                    crossed = False
+                                    for lg in left_gcs:
+                                        for rg in right_gcs:
+                                            if lg in pos2 and rg in pos2 and pos2[lg] > pos2[rg]:
+                                                # swap grandchildren positions to avoid crossing
+                                                x_l, y_l = node_positions.get(lg, (0, 0))
+                                                x_r, y_r = node_positions.get(rg, (0, 0))
+                                                node_positions[lg] = (x_r, y_l)
+                                                node_positions[rg] = (x_l, y_r)
+                                                changed = True
+                                                crossed = True
+                                                break
+                                        if crossed:
+                                            break
+                                    if changed:
+                                        break
+                                if changed:
+                                    break
+                            if changed:
+                                break
+                        if changed:
+                            break
+                    if not changed:
+                        break
+
                 # compute expected downstream scores if enabled
                 if SHOW_NODE_SCORES:
                     # build children map

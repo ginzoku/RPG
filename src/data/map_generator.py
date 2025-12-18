@@ -505,12 +505,19 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                                     break
                             if child_node is None:
                                 return False
+                            # do not remove if this would orphan the child
                             parents = child_node.get('parents', [])
                             if parent_id not in parents:
                                 return False
                             if len(parents) <= 1:
                                 return False
+                            # also ensure the parent would not become childless in this adjacency
+                            if parent_id in children_by_parent and len(children_by_parent.get(parent_id, [])) <= 1:
+                                return False
                             parents.remove(parent_id)
+                            # update local children_by_parent to reflect removal
+                            if parent_id in children_by_parent and child_id in children_by_parent[parent_id]:
+                                children_by_parent[parent_id].remove(child_id)
                             return True
 
                         if choice == 0:
@@ -528,6 +535,26 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                                 children_by_parent[left].remove(lc)
                             if rc in children_by_parent.get(right, []):
                                 children_by_parent[right].remove(rc)
+                        else:
+                            # If neither removal was possible (would orphan a child), attempt to
+                            # resolve by swapping the positions of the two children in next_row.
+                            # This preserves topology while eliminating the visual crossing.
+                            try:
+                                # find indices in next_row
+                                nr = graph[lvl + 1]
+                                idx_lc = next((idx for idx, n in enumerate(nr) if n['id'] == lc), None)
+                                idx_rc = next((idx for idx, n in enumerate(nr) if n['id'] == rc), None)
+                                if idx_lc is not None and idx_rc is not None and idx_lc > idx_rc:
+                                    # swap so lc appears left of rc
+                                    nr[idx_lc], nr[idx_rc] = nr[idx_rc], nr[idx_lc]
+                                    # recompute pos_map to reflect change
+                                    for j, n in enumerate(nr):
+                                        pos_map[n['id']] = j
+                                    # update children_by_parent lists conservatively
+                                    # (positions changed only; parent-child relations unchanged)
+                                    removed = True
+                            except Exception:
+                                pass
 
     # Additional post-process pass: repeatedly detect and remove bridge-induced crossings
     # (lvl -> lvl+1 -> lvl+2) by removing one parent->bridge edge when safe.
@@ -586,7 +613,13 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                                 if n['id'] == child_id:
                                     parents = n.get('parents', [])
                                     if parent_id in parents and len(parents) > 1:
+                                        # ensure parent won't become childless
+                                        if parent_id in children_by_parent and len(children_by_parent.get(parent_id, [])) <= 1:
+                                            return False
                                         parents.remove(parent_id)
+                                        # update children_by_parent mapping
+                                        if parent_id in children_by_parent and child_id in children_by_parent[parent_id]:
+                                            children_by_parent[parent_id].remove(child_id)
                                         return True
                             return False
 
@@ -1397,6 +1430,36 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             if 'type' not in n or n['type'] is None:
                 n['type'] = 'monster'
 
+    # Generator invariant: prevent empty nodes that both merge (>1 parents)
+    # and split (>1 children). Such "bridge" nodes (parentA & parentB -> empty -> childC & childD)
+    # cause visual parent->grandchild crossings. Convert those empties back to their
+    # original type (if known) to preserve topology while avoiding the problematic pattern.
+    id_to_node_post = {n['id']: n for lvl in graph for n in lvl}
+    children_post = {nid: [] for nid in id_to_node_post}
+    for lvl_nodes in graph:
+        for n in lvl_nodes:
+            for p in n.get('parents', []):
+                if p in children_post:
+                    children_post[p].append(n['id'])
+
+    for lvl in range(1, LEVELS - 1):
+        for node in list(graph[lvl]):
+            if node.get('type') != 'empty':
+                continue
+            parents = node.get('parents', [])
+            num_parents = len(parents)
+            num_children = len(children_post.get(node['id'], []))
+            if num_parents > 1 and num_children > 1:
+                # restore original type if available, else default to 'monster'
+                node['type'] = node.pop('_orig_type', node.get('_orig_type', node.get('type', 'monster')))
+                # clean up skipped_nodes record if present
+                try:
+                    for srec in list(skipped_nodes):
+                        if srec.get('id') == node['id']:
+                            skipped_nodes.remove(srec)
+                except Exception:
+                    pass
+
     # Safety fix: ensure no non-start node is parentless and no non-boss node is childless.
     # For any node (except start row) that has no parents, attach it to the nearest node in the previous row.
     # For any node (except boss row) that has no children, attach it as a parent to the nearest node in the next row.
@@ -1437,6 +1500,63 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     if nid not in target.get('parents', []):
                         target.setdefault('parents', []).append(nid)
                         children.setdefault(nid, []).append(target['id'])
+
+    # Final pass: resolve any remaining adjacent-parent crossings by reordering
+    # next_row nodes when edge-removal would orphan nodes. This preserves the
+    # topology while removing visual crossings.
+    for lvl in range(0, LEVELS - 1):
+        row = graph[lvl]
+        next_row = graph[lvl + 1]
+        pos_map = {n['id']: i for i, n in enumerate(next_row)}
+        # build children_by_parent for this adjacency
+        children_by_parent = {n['id']: [] for n in row}
+        for child in next_row:
+            for p in child.get('parents', []):
+                if p in children_by_parent:
+                    children_by_parent[p].append(child['id'])
+
+        for i in range(len(row) - 1):
+            left = row[i]['id']
+            right = row[i + 1]['id']
+            left_children = children_by_parent.get(left, [])
+            right_children = children_by_parent.get(right, [])
+            if not left_children or not right_children:
+                continue
+            for lc in list(left_children):
+                for rc in list(right_children):
+                    if lc not in pos_map or rc not in pos_map:
+                        continue
+                    if pos_map[lc] > pos_map[rc]:
+                        # try safe removals first (as earlier logic did)
+                        def try_remove_local(parent_id, child_id):
+                            for n in next_row:
+                                if n['id'] == child_id:
+                                    parents = n.get('parents', [])
+                                    if parent_id in parents and len(parents) > 1:
+                                        # ensure parent won't become childless
+                                        if parent_id in children_by_parent and len(children_by_parent.get(parent_id, [])) <= 1:
+                                            return False
+                                        parents.remove(parent_id)
+                                        if parent_id in children_by_parent and child_id in children_by_parent[parent_id]:
+                                            children_by_parent[parent_id].remove(child_id)
+                                        return True
+                            return False
+
+                        removed = False
+                        if try_remove_local(left, lc) or try_remove_local(right, rc):
+                            removed = True
+                        if not removed:
+                            # swap positions to resolve crossing
+                            try:
+                                idx_lc = next((idx for idx, n in enumerate(next_row) if n['id'] == lc), None)
+                                idx_rc = next((idx for idx, n in enumerate(next_row) if n['id'] == rc), None)
+                                if idx_lc is not None and idx_rc is not None and idx_lc > idx_rc:
+                                    next_row[idx_lc], next_row[idx_rc] = next_row[idx_rc], next_row[idx_lc]
+                                    # update pos_map for subsequent checks
+                                    for j, n in enumerate(next_row):
+                                        pos_map[n['id']] = j
+                            except Exception:
+                                pass
 
     return graph
 
