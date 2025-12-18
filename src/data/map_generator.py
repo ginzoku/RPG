@@ -38,6 +38,9 @@ def get_default_params() -> Dict:
         'REST_BOOST_NO_REST_AMOUNT': 0.20,
         # penalty/discount multipliers
         'REST_PENALTY_AFTER_TREASURE': 0.5,
+        # branching tuning: if a branch hasn't reached this width (excluding rest/treasure rows), boost branching probability
+        'BRANCH_WIDTH_TARGET': 4,
+        'BRANCH_BOOST_PROB': 0.15,
         # guaranteed counts
         'GUARANTEED_ELITES': 3,
         'GUARANTEED_SHOPS': 3,
@@ -75,6 +78,17 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
 
     nid = 0
     graph: List[List[Dict]] = []
+
+    # helper to find node by id within current graph
+    def find_node_by_id(nid_search: int):
+        for lvl_nodes in graph:
+            for nd in lvl_nodes:
+                if nd['id'] == nid_search:
+                    return nd
+        return None
+
+    BRANCH_WIDTH_TARGET = params.get('BRANCH_WIDTH_TARGET', 4)
+    BRANCH_BOOST_PROB = params.get('BRANCH_BOOST_PROB', 0.15)
 
     # Start row count based on START_WEIGHTS
     r = random.random() * 100
@@ -255,9 +269,29 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             continue
 
         # Normal growth: each parent spawns 1-3 children (weighted)
+        # Normal growth: each parent spawns 1-3 children (weighted)
         for p in prev:
+            # determine if this branch has already reached target width; if not, boost branching
+            def branch_reached_width(pid, target):
+                cur = find_node_by_id(pid)
+                visited = set()
+                while cur is not None and cur['id'] not in visited:
+                    visited.add(cur['id'])
+                    lvl_idx = cur.get('level', None)
+                    if lvl_idx is not None and lvl_idx not in REST_ROWS and lvl_idx not in TREASURE_ROWS:
+                        if len(graph[lvl_idx]) >= target:
+                            return True
+                    parents = cur.get('parents', [])
+                    if not parents:
+                        break
+                    cur = find_node_by_id(parents[0])
+                return False
+
             rr = random.random()
-            if rr < 0.6:
+            first_cut = 0.6
+            if not branch_reached_width(p['id'], BRANCH_WIDTH_TARGET):
+                first_cut = max(0.0, 0.6 - BRANCH_BOOST_PROB)
+            if rr < first_cut:
                 c = 1
             elif rr < 0.9:
                 c = 2
