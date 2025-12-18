@@ -18,17 +18,17 @@ class MapController:
                     graph = getattr(map_scene, 'map_graph', None)
                     if graph:
                         count = len(graph)
-                        # match MapView: large fixed spacing so rows are far apart
-                        level_margin = 100
-                        level_spacing = 200
+                        # match MapView: spacing shortened to match view
+                        level_margin = 80
+                        level_spacing = 100
                         content_height = level_margin * 2 + (count - 1) * level_spacing
                         visible = settings.SCREEN_HEIGHT
                     else:
                         # fallback to previous chain assumptions
                         count = 15
                         sq = 44
-                        spacing = 84
-                        top_margin = 140
+                        spacing = 42
+                        top_margin = 70
                         content_height = top_margin * 2 + (count - 1) * spacing
                         visible = settings.SCREEN_HEIGHT
                     max_scroll = max(0, int(content_height - visible))
@@ -49,15 +49,15 @@ class MapController:
                     graph = getattr(map_scene, 'map_graph', None)
                     if graph:
                         count = len(graph)
-                        level_margin = 100
-                        level_spacing = 200
+                        level_margin = 80
+                        level_spacing = 100
                         content_height = level_margin * 2 + (count - 1) * level_spacing
                         visible = settings.SCREEN_HEIGHT
                     else:
                         count = 15
                         sq = 44
-                        spacing = 84
-                        top_margin = 140
+                        spacing = 42
+                        top_margin = 70
                         content_height = top_margin * 2 + (count - 1) * spacing
                         visible = settings.SCREEN_HEIGHT
                     max_scroll = max(0, int(content_height - visible))

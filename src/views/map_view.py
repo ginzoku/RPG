@@ -14,10 +14,10 @@ class MapView:
         # アイコン描画設定（小さめにする）
         self.icon_size = max(20, settings.SCREEN_WIDTH // 20)
         self.icon_margin = 10
-        # オーバーレイ上のチェイン表示設定（縦方向、間隔を広めにして線を長くする）
+        # オーバーレイ上のチェイン表示設定（縦方向、間隔を控えめにして見通しを良くする）
         self.chain_count = 15
-        self.chain_square = 36
-        self.chain_spacing = 84
+        self.chain_square = 30
+        self.chain_spacing = 34
         self.chain_top_margin = 80
         self.chain_x = settings.SCREEN_WIDTH // 2
         # dashed line parameters
@@ -79,11 +79,11 @@ class MapView:
             if not fallback_grid:
                 node_positions = {}
                 expected_scores = {}
-                # 強めに縦間隔を離すため固定の行間を使う（ガッツリ離す）
-                level_margin = 100
-                level_spacing = 200  # 1行あたりの縦間隔（px） — 十分大きくしてスクロールで見渡せるようにする
-                node_size = 44
-                h_padding = 60
+                # 行間とノードサイズを少しコンパクトにして見渡しやすくする
+                level_margin = 80
+                level_spacing = 80  # 1行あたりの縦間隔（px） （半分に短縮）
+                node_size = 32
+                h_padding = 20
                 for lvl_idx, nodes in enumerate(graph):
                     y = int(level_margin + lvl_idx * level_spacing)
                     # apply vertical scroll offset
@@ -134,8 +134,19 @@ class MapView:
                                 # skip drawing if completely off-screen vertically
                                 if (y1 < -100 and y2 < -100) or (y1 > settings.SCREEN_HEIGHT + 100 and y2 > settings.SCREEN_HEIGHT + 100):
                                     continue
-                                # thicker, slightly darker line for readability
-                                pygame.draw.line(overlay, (140, 140, 140), (x1, y1), (x2, y2), 4)
+                                # draw shorter connection (stop at node radii) and thinner line for compact view
+                                r = node_size // 2
+                                dx = x2 - x1
+                                dy = y2 - y1
+                                dist = (dx * dx + dy * dy) ** 0.5
+                                if dist > 0:
+                                    sx = x1 + dx * (r / dist)
+                                    sy = y1 + dy * (r / dist)
+                                    ex = x2 - dx * (r / dist)
+                                    ey = y2 - dy * (r / dist)
+                                    pygame.draw.line(overlay, (140, 140, 140), (int(sx), int(sy)), (int(ex), int(ey)), 3)
+                                else:
+                                    pygame.draw.line(overlay, (140, 140, 140), (x1, y1), (x2, y2), 3)
 
                 # draw nodes onto overlay (after connections so nodes overlay lines)
                 for lvl_idx, nodes in enumerate(graph):
@@ -178,9 +189,9 @@ class MapView:
             else:
                 # フォールバック: 縦に15個のマスを並べて描画（スクロールで見渡せる）
                 count = 15
-                node_size = 44
-                level_margin = 100
-                level_spacing = 200
+                node_size = 32
+                level_margin = 80
+                level_spacing = 80
                 cx = settings.SCREEN_WIDTH // 2
 
                 # compute total content height and clamp scroll
@@ -192,9 +203,9 @@ class MapView:
                 if cur_scroll > max_scroll:
                     cur_scroll = max_scroll
 
-                # draw connecting vertical lines between centers
+                # draw connecting vertical lines between centers (shorten by node radius)
                 line_color = (140, 140, 140)
-                line_width = 6
+                line_width = 3
                 centers = []
                 for i in range(count):
                     y = level_margin + i * level_spacing - cur_scroll
@@ -206,7 +217,19 @@ class MapView:
                     # skip if both points off-screen
                     if (y1 < -100 and y2 < -100) or (y1 > settings.SCREEN_HEIGHT + 100 and y2 > settings.SCREEN_HEIGHT + 100):
                         continue
-                    pygame.draw.line(overlay, line_color, (x1, y1), (x2, y2), line_width)
+                    # shorten by node radius for nicer spacing
+                    r = node_size // 2
+                    dx = x2 - x1
+                    dy = y2 - y1
+                    dist = (dx * dx + dy * dy) ** 0.5
+                    if dist > 0:
+                        sx = x1 + dx * (r / dist)
+                        sy = y1 + dy * (r / dist)
+                        ex = x2 - dx * (r / dist)
+                        ey = y2 - dy * (r / dist)
+                        pygame.draw.line(overlay, line_color, (int(sx), int(sy)), (int(ex), int(ey)), line_width)
+                    else:
+                        pygame.draw.line(overlay, line_color, (x1, y1), (x2, y2), line_width)
 
                 # draw squares
                 for i, (cx, y) in enumerate(centers):
