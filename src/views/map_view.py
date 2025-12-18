@@ -83,7 +83,8 @@ class MapView:
                 level_margin = 80
                 level_spacing = 80  # 1行あたりの縦間隔（px） （半分に短縮）
                 node_size = 32
-                h_padding = 20
+                # increase horizontal padding between nodes to avoid line/node overlap
+                h_padding = 40
                 for lvl_idx, nodes in enumerate(graph):
                     y = int(level_margin + lvl_idx * level_spacing)
                     # apply vertical scroll offset
