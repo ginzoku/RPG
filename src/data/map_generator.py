@@ -93,18 +93,6 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     return nd
         return None
 
-    # helper: attach children entries on parent nodes for a created row
-    def attach_children_for_row(row_nodes):
-        for child in row_nodes:
-            child.setdefault('children', [])
-            for pid in child.get('parents', []):
-                parent = find_node_by_id(pid)
-                if parent is None:
-                    continue
-                parent.setdefault('children', [])
-                if child['id'] not in parent['children']:
-                    parent['children'].append(child['id'])
-
     BRANCH_WIDTH_TARGET = params.get('BRANCH_WIDTH_TARGET', 4)
     BRANCH_BOOST_PROB = params.get('BRANCH_BOOST_PROB', 0.15)
 
@@ -215,7 +203,6 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 for p in prev:
                     row.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': 'rest'})
                     nid += 1
-                attach_children_for_row(row)
                 graph.append(row)
                 # ensure at least 2 nodes for non-first, non-boss rows
                 if lvl != 0 and lvl != LEVELS - 1:
@@ -287,7 +274,6 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 if need > 0:
                     temp, nid = pairwise_merge_k(temp, need, nid)
                 row = temp
-                attach_children_for_row(row)
                 graph.append(row)
                 continue
 
@@ -316,7 +302,6 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     if t.get('merged_from'):
                         new_node['merged_from'] = True
                     row.append(new_node)
-            attach_children_for_row(row)
             graph.append(row)
             # ensure at least 2 nodes for non-first, non-boss rows
             if lvl != 0 and lvl != LEVELS - 1:
@@ -330,7 +315,6 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         if lvl == LEVELS - 1:
             row.append({'id': nid, 'level': lvl, 'parents': [p['id'] for p in prev], 'type': 'boss'})
             nid += 1
-            attach_children_for_row(row)
             graph.append(row)
             # ensure at least 2 nodes for non-first, non-boss rows
             if lvl != 0 and lvl != LEVELS - 1:
@@ -442,7 +426,6 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             need = len(row) - MAX_PER_ROW
             row, nid = pairwise_merge_k(row, need, nid)
 
-        attach_children_for_row(row)
         graph.append(row)
         # ensure at least 2 nodes for non-first, non-boss rows
         if lvl != 0 and lvl != LEVELS - 1:
@@ -545,26 +528,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                                 children_by_parent[left].remove(lc)
                             if rc in children_by_parent.get(right, []):
                                 children_by_parent[right].remove(rc)
-    # Ensure `children` lists mirror `parents` after any parent-edge modifications above.
-    # This prevents asymmetry where nodes have parents but their parent nodes' `children`
-    # lists were not updated during generation/postprocessing.
-    id_to_node = {}
-    for lvl_nodes in graph:
-        for n in lvl_nodes:
-            id_to_node[n['id']] = n
-            # ensure key exists
-            if 'children' not in n:
-                n['children'] = []
-    # clear and rebuild children from parents
-    for n in id_to_node.values():
-        n['children'] = []
-    for nid, n in id_to_node.items():
-        for p in n.get('parents', []):
-            if p in id_to_node:
-                parent = id_to_node[p]
-                parent.setdefault('children', [])
-                if nid not in parent['children']:
-                    parent['children'].append(nid)
+
     # Assign types according to MAP_LOGIC probabilities with constraints.
     # Base probabilities (per-node): monster 30%, elite 15%, event 32%, shop 8%, rest 15%
     levels_map = build_levels_map(graph)
@@ -1061,31 +1025,83 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
 
             random.shuffle(candidates_low)
             random.shuffle(candidates_high)
-
+            
             def try_place_one(lst, force=False):
+                """Place one empty from lst.
+                Prefer candidates that are farther from the first rest level and that
+                increase column/level dispersion. If `force` is True pick best even if it
+                violates `min_required`.
+                """
                 nonlocal current_skips
-                best_candidate = None
-                best_cost = -1
+                import math
+                # build current per-column empty counts
+                col_empty_counts = {}
+                for lvl_idx in range(1, LEVELS - 1):
+                    for i, n in enumerate(graph[lvl_idx]):
+                        if n.get('type') == 'empty':
+                            col_empty_counts[i] = col_empty_counts.get(i, 0) + 1
+
+                MIN_DIST = 2
+                W_DIST = 1.5
+                W_CENTER = 0.4
+                W_COL = 1.0
+
+                def score_candidate(cand):
+                    lvl_idx = cand.get('level', 0)
+                    # distance from first_rest (higher is better)
+                    dist = max(0, lvl_idx - first_rest_level)
+                    dist_score = dist
+                    # column index and center preference
+                    try:
+                        row = graph[lvl_idx]
+                        col = row.index(cand)
+                        center = (len(row) - 1) / 2.0
+                        if len(row) > 1:
+                            center_pref = 1.0 - (abs(col - center) / (center if center > 0 else 1))
+                        else:
+                            center_pref = 1.0
+                    except Exception:
+                        col = 0
+                        center_pref = 0.0
+                    col_count = col_empty_counts.get(col, 0)
+                    col_score = 1.0 / (1 + col_count)
+                    # base score combines distance (with soft threshold) and distribution
+                    dist_bonus = (dist_score - MIN_DIST) if dist_score >= MIN_DIST else (dist_score - MIN_DIST) * 0.5
+                    sc = W_DIST * dist_bonus + W_CENTER * center_pref + W_COL * col_score + (0.01 * random.random())
+                    return sc
+
+                valid_candidates = []
+                best_forced = (None, -1)
                 for cand in lst:
                     orig = cand.get('type')
                     cand['type'] = 'empty'
                     new_cost = compute_min_cost()
+                    cand_score = score_candidate(cand)
+                    # collect candidates that meet min_required
                     if new_cost >= min_required:
-                        current_skips += 1
-                        return True
-                    # collect best (least harmful) candidate when forcing
-                    if force:
-                        if new_cost > best_cost:
-                            best_cost = new_cost
-                            best_candidate = cand
-                    # revert temporary change
+                        valid_candidates.append((cand_score, cand))
+                    # track best candidate for force mode
+                    if cand_score > best_forced[1]:
+                        best_forced = (cand, cand_score)
+                    # revert
                     cand['type'] = orig
-                if force and best_candidate is not None:
-                    # place the best candidate even if it violates min_required
-                    best_candidate['_orig_type'] = best_candidate.get('_orig_type', best_candidate.get('type'))
-                    best_candidate['type'] = 'empty'
+
+                if valid_candidates:
+                    # pick best-scoring valid candidate
+                    valid_candidates.sort(key=lambda x: x[0], reverse=True)
+                    best = valid_candidates[0][1]
+                    best['_orig_type'] = best.get('_orig_type', best.get('type'))
+                    best['type'] = 'empty'
                     current_skips += 1
                     return True
+
+                if force and best_forced[0] is not None:
+                    best = best_forced[0]
+                    best['_orig_type'] = best.get('_orig_type', best.get('type'))
+                    best['type'] = 'empty'
+                    current_skips += 1
+                    return True
+
                 return False
 
             # place low if needed
@@ -1146,19 +1162,47 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             high_skips = [(lvl_idx, n) for lvl_idx, lvl in enumerate(graph) for n in lvl if n.get('type') == 'empty' and lvl_idx >= first_rest_level]
             need = max(0, 2 - len(high_skips))
             if need > 0:
-                placed = 0
+                # Score high-region candidates and pick the best `need` nodes to place empties,
+                # preferring nodes farther from the first rest level and spreading across columns.
+                high_candidates = []
                 for lvl_idx in range(max(1, first_rest_level), LEVELS - 1):
                     for n in graph[lvl_idx]:
                         if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
                             continue
-                        n['_orig_type'] = n.get('type')
-                        n['type'] = 'empty'
-                        placed += 1
-                        if placed >= need:
-                            break
+                        high_candidates.append(n)
+
+                def score_for_pick(cand):
+                    lvl_idx = cand.get('level', 0)
+                    dist = max(0, lvl_idx - first_rest_level)
+                    try:
+                        row = graph[lvl_idx]
+                        col = row.index(cand)
+                        center = (len(row) - 1) / 2.0
+                        center_pref = 1.0 - (abs(col - center) / (center if center > 0 else 1)) if len(row) > 1 else 1.0
+                    except Exception:
+                        col = 0
+                        center_pref = 0.0
+                    col_count = sum(1 for lvl in range(1, LEVELS - 1) for i, nn in enumerate(graph[lvl]) if i == col and nn.get('type') == 'empty')
+                    col_score = 1.0 / (1 + col_count)
+                    return (dist, col_score, center_pref, random.random())
+
+                # sort by tuple (dist desc, col_score desc, center_pref desc, random)
+                high_candidates.sort(key=lambda c: score_for_pick(c), reverse=True)
+                # diversify: take a pool from the top candidates and pick randomly from it
+                pool_size = min(max(5, need * 3), len(high_candidates))
+                pool = high_candidates[:pool_size]
+                chosen = set()
+                # sample without replacement from pool
+                import random as _rand
+                picks = _rand.sample(pool, min(need, len(pool))) if pool else []
+                placed = 0
+                for cand in picks:
+                    cand['_orig_type'] = cand.get('type')
+                    cand['type'] = 'empty'
+                    placed += 1
                     if placed >= need:
                         break
-                # final fallback: if still not enough, convert any remaining non-special nodes in high region
+                # final fallback: if still not enough (edge cases), convert any remaining non-special nodes in high region
                 if placed < need:
                     for lvl_idx in range(max(1, first_rest_level), LEVELS - 1):
                         for n in graph[lvl_idx]:
@@ -1256,6 +1300,26 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                         break
                 if placed >= need:
                     break
+    # Additional cleanup: ensure at most one 'empty' per visual column index to avoid column-wise clustering.
+    col_map = {}
+    for lvl_idx in range(1, LEVELS - 1):
+        for i, n in enumerate(graph[lvl_idx]):
+            if n.get('type') == 'empty':
+                col_map.setdefault(i, []).append((lvl_idx, n))
+
+    for col_idx, items in col_map.items():
+        if len(items) <= 1:
+            continue
+        # prefer empties in high region and deeper levels
+        high_items = [it for it in items if it[0] >= first_rest]
+        if high_items:
+            keep = max(high_items, key=lambda x: x[0])
+        else:
+            keep = max(items, key=lambda x: x[0])
+        for lvl_idx, node in items:
+            if (lvl_idx, node) is keep:
+                continue
+            node['type'] = node.pop('_orig_type', 'monster')
 
     for lvl in range(1, LEVELS - 1):
         for n in graph[lvl]:
