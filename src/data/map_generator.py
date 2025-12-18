@@ -12,20 +12,57 @@ import random
 from typing import List, Dict
 
 
-def generate(seed: int | None = None) -> List[List[Dict]]:
+def get_default_params() -> Dict:
+    return {
+        'LEVELS': 15,
+        'MAX_PER_ROW': 6,
+        # start row weights for [1,2,3] counts (percent)
+        'start_weights': [10, 35, 55],
+        # per-node type probabilities (used for lvl >= 5 rows)
+        'type_probs': {'monster': 30, 'elite': 15, 'event': 32, 'shop': 8, 'rest': 15},
+        # early rows (lvl < 4) allowed distribution
+        'early_probs': {'monster': 70, 'event': 30},
+        # fixed special rows (0-based indices)
+        'rest_rows': [5, 13],
+        'treasure_rows': [6],
+        # placement caps (excluding fixed/guaranteed placements)
+        'REST_CAP': 5,
+        'ELITE_EXTRA_CAP': 5,
+        'SHOP_EXTRA_CAP': 3,
+        # guaranteed counts
+        'GUARANTEED_ELITES': 3,
+        'GUARANTEED_SHOPS': 3,
+    }
+
+
+def generate(seed: int | None = None, params: Dict | None = None) -> List[List[Dict]]:
     if seed is not None:
         random.seed(seed)
 
-    LEVELS = 15
-    MAX_PER_ROW = 6
+    if params is None:
+        params = get_default_params()
+
+    LEVELS = params['LEVELS']
+    MAX_PER_ROW = params['MAX_PER_ROW']
+    START_WEIGHTS = params['start_weights']
+    TYPE_PROBS = params['type_probs']
+    EARLY_PROBS = params['early_probs']
+    REST_ROWS = params['rest_rows']
+    TREASURE_ROWS = params['treasure_rows']
+    REST_CAP = params['REST_CAP']
+    ELITE_EXTRA_CAP = params['ELITE_EXTRA_CAP']
+    SHOP_EXTRA_CAP = params['SHOP_EXTRA_CAP']
+
+    PRE_REST_ROWS = [r - 1 for r in REST_ROWS]
+
     nid = 0
     graph: List[List[Dict]] = []
 
-    # Start row count: 10% ->1, 35% ->2, 55% ->3
+    # Start row count based on START_WEIGHTS
     r = random.random() * 100
-    if r < 10:
+    if r < START_WEIGHTS[0]:
         start_count = 1
-    elif r < 45:
+    elif r < START_WEIGHTS[0] + START_WEIGHTS[1]:
         start_count = 2
     else:
         start_count = 3
@@ -118,12 +155,10 @@ def generate(seed: int | None = None) -> List[List[Dict]]:
         row: List[Dict] = []
 
         # Special rows
-        # Move rest rows earlier: now rest rows are at 6th and 13th positions (1-based).
-        # For 0-based indices: rest rows are lvl == 5 or lvl == 12.
-        # Behavior:
+        # Behavior for configured rest rows (REST_ROWS):
         #  - If the previous row has 3 or fewer nodes, preserve that count and create one rest node per previous node (one-to-one).
         #  - If the previous row has more than 3 nodes, merge adjacent parents until exactly 3 rest nodes remain.
-        if lvl == 5 or lvl == 13:
+        if lvl in REST_ROWS:
             if prev_count <= 3:
                 for p in prev:
                     row.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': 'rest'})
@@ -151,7 +186,7 @@ def generate(seed: int | None = None) -> List[List[Dict]]:
                 graph.append(row)
                 continue
 
-        if lvl == 6:
+        if lvl in TREASURE_ROWS:
             # Treasure row should not branch from rest: prefer one-to-one mapping from prev rest nodes.
             # If there are more prev nodes than MAX_PER_ROW, group adjacent parents into MAX_PER_ROW groups.
             if prev_count <= MAX_PER_ROW:
@@ -212,9 +247,9 @@ def generate(seed: int | None = None) -> List[List[Dict]]:
                 row.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': 'normal'})
                 nid += 1
 
-        # If this row is immediately before a rest-full row (i.e. levels 4 and 12 -> next are 5 and 13),
+        # If this row is immediately before a rest-full row,
         # ensure it is merged down to at most 3 nodes so that the rest row receives three inputs.
-        if lvl in (4, 12):
+        if lvl in PRE_REST_ROWS:
             need = len(row) - 3
             if need > 0:
                 row, nid = pairwise_merge_k(row, need, nid)
@@ -330,10 +365,16 @@ def generate(seed: int | None = None) -> List[List[Dict]]:
                 continue
             # disallow elite/rest before level 4 (5th row onwards requirement)
             allowed = []
+            # prevent consecutive rest rows: if previous or next level already contains a rest, remove 'rest' from options
+            prev_has_rest = any(x.get('type') == 'rest' for x in graph[lvl - 1]) if lvl - 1 >= 0 else False
+            next_has_rest = any(x.get('type') == 'rest' for x in graph[lvl + 1]) if lvl + 1 < LEVELS else False
+            block_rest = prev_has_rest or next_has_rest
             if lvl < 4:
                 allowed = [('monster', 70), ('event', 30)]
             else:
-                allowed = [('monster', 30), ('elite', 15), ('event', 32), ('shop', 8), ('rest', 15)]
+                allowed = [('monster', 30), ('elite', 15), ('event', 32), ('shop', 8)]
+                if not block_rest:
+                    allowed.append(('rest', 15))
 
             # sample with simple weight, but enforce non-consecutive for elite/rest
             choices = [t for t, w in allowed]
@@ -376,6 +417,40 @@ def generate(seed: int | None = None) -> List[List[Dict]]:
 
     elites = pick_guaranteed('elite', 3)
     shops = pick_guaranteed('shop', 3)
+
+    # Enforce placement caps (excluding fixed/guranteed placements):
+    # - rest: max 5 outside fixed rest rows (levels 5 and 13)
+    # - elite: max 5 additional elites besides the 3 guaranteed
+    # - shop: max 3 additional shops besides the 3 guaranteed
+    REST_CAP = 5
+    ELITE_EXTRA_CAP = 5
+    SHOP_EXTRA_CAP = 3
+
+    # rest candidates (exclude fixed rest rows)
+    rest_candidates = [n for lvl_idx, lvl_nodes in enumerate(graph) if lvl_idx not in (5, 13) for n in lvl_nodes if n.get('type') == 'rest']
+    if len(rest_candidates) > REST_CAP:
+        keep = set(n['id'] for n in random.sample(rest_candidates, REST_CAP))
+        for n in rest_candidates:
+            if n['id'] not in keep:
+                n['type'] = 'monster'
+
+    # elites: preserve the guaranteed ones created by pick_guaranteed
+    elite_fixed_ids = set(n['id'] for n in elites)
+    extra_elites = [n for lvl_nodes in graph for n in lvl_nodes if n.get('type') == 'elite' and n['id'] not in elite_fixed_ids]
+    if len(extra_elites) > ELITE_EXTRA_CAP:
+        keep = set(n['id'] for n in random.sample(extra_elites, ELITE_EXTRA_CAP))
+        for n in extra_elites:
+            if n['id'] not in keep:
+                n['type'] = 'monster'
+
+    # shops: preserve the guaranteed ones created by pick_guaranteed
+    shop_fixed_ids = set(n['id'] for n in shops)
+    extra_shops = [n for lvl_nodes in graph for n in lvl_nodes if n.get('type') == 'shop' and n['id'] not in shop_fixed_ids]
+    if len(extra_shops) > SHOP_EXTRA_CAP:
+        keep = set(n['id'] for n in random.sample(extra_shops, SHOP_EXTRA_CAP))
+        for n in extra_shops:
+            if n['id'] not in keep:
+                n['type'] = 'monster'
 
     # Final pass: convert any remaining unknowns to monster
     for lvl in range(1, LEVELS - 1):
