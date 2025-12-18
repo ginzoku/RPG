@@ -703,25 +703,32 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         min_required = max(0, params.get('LEVELS', LEVELS) - 3)
 
     skipped_nodes = []
+    # determine first rest level (if any)
+    first_rest_level = min(REST_ROWS) if REST_ROWS else LEVELS
+    # build id->node map for ancestor checks
+    id_to_node_pre = {n['id']: n for lvl in graph for n in lvl}
     for lvl in range(1, LEVELS - 1):
         for node in list(graph[lvl]):
             if node.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
                 continue
-            # avoid creating consecutive skips along the same branch: if any parent is already 'empty', do not skip
             parents = node.get('parents', [])
+            # For nodes before the first rest row, allow at most one skip per branch:
+            # if any ancestor (not just immediate parent) in the same branch is already 'empty', disallow skipping.
             parent_empty = False
-            for pid in parents:
-                pnode = None
-                for lvl_nodes in graph:
-                    for nn in lvl_nodes:
-                        if nn['id'] == pid:
-                            pnode = nn
-                            break
-                    if pnode is not None:
+            if node.get('level', 0) < first_rest_level:
+                anc_ids = build_ancestors(node, levels_map)
+                for aid in anc_ids:
+                    an = id_to_node_pre.get(aid)
+                    if an is not None and an.get('type') == 'empty':
+                        parent_empty = True
                         break
-                if pnode is not None and pnode.get('type') == 'empty':
-                    parent_empty = True
-                    break
+            else:
+                # preserve previous behavior for deeper rows: check only immediate parents
+                for pid in parents:
+                    pnode = id_to_node_pre.get(pid)
+                    if pnode is not None and pnode.get('type') == 'empty':
+                        parent_empty = True
+                        break
             if parent_empty:
                 continue
             if random.random() < SKIP_PROB:
