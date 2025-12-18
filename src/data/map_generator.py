@@ -1419,8 +1419,70 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
 
     enforce_max_consecutive_events(graph, cap=3)
 
+    # enforce adjacency constraint: parents should be at same column or one left/right
+    def enforce_adjacent_parent_positions():
+        # For each level >0, map node positions and clamp parents to allowed offsets
+        for lvl_idx in range(1, len(graph)):
+            prev = graph[lvl_idx - 1]
+            cur = graph[lvl_idx]
+            if not prev or not cur:
+                continue
+            prev_pos = {n['id']: i for i, n in enumerate(prev)}
+            # for each child, keep parents whose position is within [-1,0,1] of child's index
+            for ci, child in enumerate(cur):
+                pars = child.get('parents', [])
+                allowed = []
+                for p in pars:
+                    ppos = prev_pos.get(p)
+                    if ppos is None:
+                        continue
+                    if abs(ppos - ci) <= 1:
+                        allowed.append(p)
+                if allowed:
+                    # preserve relative order but limited to allowed set
+                    child['parents'] = [p for p in pars if p in allowed]
+                else:
+                    # no allowed parents — attach to nearest prev by position
+                    # prefer left, then same, then right if equidistant
+                    best = min(prev, key=lambda n: abs(prev_pos[n['id']] - ci))
+                    child['parents'] = [best['id']]
+
     # final validation and fixes to avoid disconnected/isolated nodes
     validate_and_fix_graph(graph)
+
+    # re-apply adjacency constraint after final validation to ensure any reattachments
+    # also respect direct-down / down-left / down-right rule
+    def enforce_adjacent_parent_positions_post():
+        for lvl_idx in range(1, len(graph)):
+            # skip boss level: boss should preserve all parents from previous level
+            if lvl_idx == len(graph) - 1:
+                continue
+            prev = graph[lvl_idx - 1]
+            cur = graph[lvl_idx]
+            if not prev or not cur:
+                continue
+            prev_pos = {n['id']: i for i, n in enumerate(prev)}
+            prev_len = len(prev)
+            cur_len = len(cur)
+            for ci, child in enumerate(cur):
+                # map child's fractional position into prev index space
+                if cur_len > 1:
+                    frac = ci / (cur_len - 1)
+                else:
+                    frac = 0.0
+                target_idx = round(frac * (prev_len - 1))
+                allowed_indices = {max(0, target_idx - 1), target_idx, min(prev_len - 1, target_idx + 1)}
+                pars = child.get('parents', [])
+                allowed = [p for p in pars if prev_pos.get(p) in allowed_indices]
+                if allowed:
+                    # preserve order among allowed
+                    child['parents'] = [p for p in pars if p in allowed]
+                else:
+                    # attach nearest prev by fractional distance
+                    best = min(prev, key=lambda n: abs((prev_pos[n['id']] / max(1, prev_len - 1)) - frac))
+                    child['parents'] = [best['id']]
+
+    enforce_adjacent_parent_positions_post()
 
     return graph
 
