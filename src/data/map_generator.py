@@ -14,20 +14,20 @@ from typing import List, Dict
 
 def get_default_params() -> Dict:
     return {
-        'LEVELS': 15,
-        'MAX_PER_ROW': 6,
+        'LEVELS': 17,
+        'MAX_PER_ROW': 5,
         # start row weights for [1,2,3] counts (percent)
         'start_weights': [10, 35, 55],
         # per-node type probabilities (used for lvl >= 5 rows)
-        'type_probs': {'monster': 30, 'elite': 15, 'event': 32, 'shop': 8, 'rest': 15},
+        'type_probs': {'monster': 37, 'elite': 10, 'event': 30, 'shop': 8, 'rest': 15},
         # early rows (lvl < 4) allowed distribution
-        'early_probs': {'monster': 70, 'event': 30},
+        'early_probs': {'monster': 55, 'event': 40, 'shop': 5},
         # fixed special rows (0-based indices)
-        'rest_rows': [5, 13],
+        'rest_rows': [5, 16],
         'treasure_rows': [6],
         # placement caps (excluding fixed/guaranteed placements)
-        'REST_CAP': 5,
-        'ELITE_EXTRA_CAP': 5,
+        'REST_CAP': 4,
+        'ELITE_EXTRA_CAP': 3,
         'SHOP_EXTRA_CAP': 3,
         # guaranteed counts
         'GUARANTEED_ELITES': 3,
@@ -107,7 +107,9 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         for i in range(n - 1):
             a = nodes_list[i]
             b = nodes_list[i + 1]
-            # do not consider pairs where either node was already produced by a merge in this level
+            # skip non-dict placeholders (defensive) and already-merged markers
+            if not isinstance(a, dict) or not isinstance(b, dict):
+                continue
             if a.get('merged_from') or b.get('merged_from'):
                 continue
             parents_a = set(a.get('parents', []))
@@ -254,15 +256,15 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             if need > 0:
                 row, nid = pairwise_merge_k(row, need, nid)
 
-        # deterministic rule: if prev_count == 6, force merge to 3 nodes
-        if prev_count == 6:
+        # deterministic rule: if prev_count == MAX_PER_ROW, force merge to 3 nodes
+        if prev_count == MAX_PER_ROW:
             need = len(row) - 3
             if need > 0:
                 row, nid = pairwise_merge_k(row, need, nid)
 
         # probabilistic merges based on prev_count
         merge_chance = 0.0
-        if prev_count >= 6:
+        if prev_count >= MAX_PER_ROW:
             merge_chance = 0.3
         elif prev_count >= 4:
             merge_chance = 0.3
@@ -344,10 +346,10 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
 
     # Ensure guaranteed elites and shops later; first mark special fixed rows
     for lvl in range(LEVELS):
-        if lvl == 5 or lvl == 13:
+        if lvl in REST_ROWS:
             for n in graph[lvl]:
                 n['type'] = 'rest'
-        elif lvl == 6:
+        elif lvl in TREASURE_ROWS:
             for n in graph[lvl]:
                 n['type'] = 'treasure'
         elif lvl == LEVELS - 1:
@@ -364,17 +366,19 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             if 'type' in n and n['type'] in ('rest', 'treasure', 'boss', 'monster'):
                 continue
             # disallow elite/rest before level 4 (5th row onwards requirement)
-            allowed = []
-            # prevent consecutive rest rows: if previous or next level already contains a rest, remove 'rest' from options
+            # build allowed types from params
             prev_has_rest = any(x.get('type') == 'rest' for x in graph[lvl - 1]) if lvl - 1 >= 0 else False
             next_has_rest = any(x.get('type') == 'rest' for x in graph[lvl + 1]) if lvl + 1 < LEVELS else False
             block_rest = prev_has_rest or next_has_rest
             if lvl < 4:
-                allowed = [('monster', 70), ('event', 30)]
+                allowed_items = list(EARLY_PROBS.items())
             else:
-                allowed = [('monster', 30), ('elite', 15), ('event', 32), ('shop', 8)]
-                if not block_rest:
-                    allowed.append(('rest', 15))
+                allowed_items = list(TYPE_PROBS.items())
+            # remove 'rest' option when it would create consecutive rest rows
+            if block_rest:
+                allowed = [(t, w) for t, w in allowed_items if t != 'rest']
+            else:
+                allowed = list(allowed_items)
 
             # sample with simple weight, but enforce non-consecutive for elite/rest
             choices = [t for t, w in allowed]
@@ -427,7 +431,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
     SHOP_EXTRA_CAP = 3
 
     # rest candidates (exclude fixed rest rows)
-    rest_candidates = [n for lvl_idx, lvl_nodes in enumerate(graph) if lvl_idx not in (5, 13) for n in lvl_nodes if n.get('type') == 'rest']
+    rest_fixed_set = set(REST_ROWS)
+    rest_candidates = [n for lvl_idx, lvl_nodes in enumerate(graph) if lvl_idx not in rest_fixed_set for n in lvl_nodes if n.get('type') == 'rest']
     if len(rest_candidates) > REST_CAP:
         keep = set(n['id'] for n in random.sample(rest_candidates, REST_CAP))
         for n in rest_candidates:
@@ -452,10 +457,170 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             if n['id'] not in keep:
                 n['type'] = 'monster'
 
+    # Safety final clamp: ensure no row exceeds MAX_PER_ROW by pairwise merging as needed.
+    # This is a protective post-process in case earlier steps expanded rows beyond the cap.
+    # Use an iterative approach with a forced-merge fallback to guarantee progress
+    # and avoid potential infinite loops when pairwise_merge_k cannot find valid pairs.
+    max_per = params.get('MAX_PER_ROW', MAX_PER_ROW)
+    for lvl_idx, lvl_nodes in enumerate(graph):
+        # skip start and boss rows
+        if lvl_idx == 0 or lvl_idx == LEVELS - 1:
+            continue
+        # if already within cap, continue
+        if len(lvl_nodes) <= max_per:
+            continue
+        # iterative reduction with a safety cap on iterations
+        iter_limit = max(10, len(lvl_nodes) * 2)
+        it = 0
+        while len(lvl_nodes) > max_per and it < iter_limit:
+            need = len(lvl_nodes) - max_per
+            new_nodes, new_nid = pairwise_merge_k(lvl_nodes, need, nid)
+            # if pairwise succeeded in reducing length, accept result
+            if len(new_nodes) < len(lvl_nodes):
+                lvl_nodes = new_nodes
+                nid = new_nid
+            else:
+                # fallback: perform a single forced merge of the first adjacent pair
+                if len(lvl_nodes) >= 2:
+                    a = lvl_nodes[0]
+                    b = lvl_nodes[1]
+                    merged_parents = list(set(a.get('parents', []) + b.get('parents', [])))
+                    merged = {'id': nid, 'level': a.get('level', b.get('level')), 'parents': merged_parents, 'merged_from': True}
+                    nid += 1
+                    lvl_nodes = [merged] + lvl_nodes[2:]
+                else:
+                    break
+            it += 1
+        # final safety: if still oversized, truncate by merging tail into previous nodes until within cap
+        while len(lvl_nodes) > max_per and len(lvl_nodes) >= 2:
+            # merge the last two elements
+            a = lvl_nodes[-2]
+            b = lvl_nodes[-1]
+            merged_parents = list(set(a.get('parents', []) + b.get('parents', [])))
+            merged = {'id': nid, 'level': a.get('level', b.get('level')), 'parents': merged_parents, 'merged_from': True}
+            nid += 1
+            lvl_nodes = lvl_nodes[:-2] + [merged]
+        graph[lvl_idx] = lvl_nodes
+
     # Final pass: convert any remaining unknowns to monster
     for lvl in range(1, LEVELS - 1):
         for n in graph[lvl]:
             if 'type' not in n or n['type'] is None:
                 n['type'] = 'monster'
+
+    return graph
+
+
+def balance_choices(graph: List[List[Dict]], params: Dict | None = None, threshold: float = 2.0) -> List[List[Dict]]:
+    """Post-process the generated graph to reduce large expected-value gaps between choices.
+
+    This is a simple heuristic:
+    - Compute expected downstream score for each node (node_score + mean(child_expected)).
+    - For each level with multiple nodes, if max - min > threshold, try to promote the lowest nodes
+      to a better type (elite/shop/treasure) while respecting placement caps in params.
+    Returns the mutated graph.
+    """
+    if params is None:
+        params = get_default_params()
+
+    # scoring for types (tunable)
+    score_map = {
+        'monster': 0.0,
+        'event': 1.0,
+        'shop': 1.5,
+        'rest': 0.5,
+        'treasure': 2.0,
+        'elite': 3.0,
+        'boss': 5.0,
+        'start': 0.0,
+    }
+
+    # build id -> node mapping and children adjacency
+    id_to_node = {}
+    children = {}
+    for lvl_nodes in graph:
+        for n in lvl_nodes:
+            id_to_node[n['id']] = n
+            children[n['id']] = []
+    for lvl_nodes in graph:
+        for n in lvl_nodes:
+            for p in n.get('parents', []):
+                if p in children:
+                    children[p].append(n['id'])
+
+    # compute expected downstream values via reverse-topological order (bottom-up by level)
+    LEVELS = len(graph)
+    expected = {}
+    # initialize boss level
+    for lvl in range(LEVELS - 1, -1, -1):
+        for n in graph[lvl]:
+            nid = n['id']
+            base = score_map.get(n.get('type', 'monster'), 0.0)
+            childs = children.get(nid, [])
+            if not childs:
+                expected[nid] = base
+            else:
+                exp_children = [expected[cid] for cid in childs]
+                expected[nid] = base + (sum(exp_children) / len(exp_children))
+
+    # count current fixed/guaranteed placements to obey caps
+    rest_fixed_rows = set(params.get('rest_rows', []))
+    rest_existing = [n for lvl_idx, lvl in enumerate(graph) if lvl_idx not in rest_fixed_rows for n in lvl if n.get('type') == 'rest']
+    elite_existing = [n for lvl in graph for n in lvl if n.get('type') == 'elite']
+    shop_existing = [n for lvl in graph for n in lvl if n.get('type') == 'shop']
+    rest_cap = params.get('REST_CAP', 5)
+    elite_extra_cap = params.get('ELITE_EXTRA_CAP', 5)
+    shop_extra_cap = params.get('SHOP_EXTRA_CAP', 3)
+
+    # process each level
+    for lvl_idx, lvl in enumerate(graph):
+        if lvl_idx == 0 or lvl_idx == LEVELS - 1:
+            continue
+        if len(lvl) < 2:
+            continue
+        exps = [(expected[n['id']], n) for n in lvl]
+        exps.sort(key=lambda x: x[0])
+        low = exps[0][0]
+        high = exps[-1][0]
+        if high - low <= threshold:
+            continue
+        # attempt to promote lowest nodes one by one until gap reduced or caps hit
+        for val, node in exps:
+            if high - expected[node['id']] <= threshold:
+                break
+            # skip fixed types
+            if node.get('type') in ('rest', 'treasure', 'boss', 'start'):
+                continue
+            # prefer promoting to shop then elite then treasure based on availability
+            promoted = False
+            # try shop
+            if len([n for n in shop_existing if n.get('id')]) < (3 + shop_extra_cap):
+                node['type'] = 'shop'
+                shop_existing.append(node)
+                promoted = True
+            # else try elite
+            if not promoted and len(elite_existing) < (params.get('GUARANTEED_ELITES', 3) + elite_extra_cap):
+                node['type'] = 'elite'
+                elite_existing.append(node)
+                promoted = True
+            # else try treasure (only if not in rest_rows)
+            if not promoted and lvl_idx not in params.get('rest_rows', []):
+                node['type'] = 'treasure'
+                promoted = True
+            if promoted:
+                # recompute expected downstream for this level upwards (simple recompute)
+                for l2 in range(lvl_idx, -1, -1):
+                    for n2 in graph[l2]:
+                        nid2 = n2['id']
+                        base2 = score_map.get(n2.get('type', 'monster'), 0.0)
+                        childs2 = children.get(nid2, [])
+                        if not childs2:
+                            expected[nid2] = base2
+                        else:
+                            expected[nid2] = base2 + (sum(expected[cid] for cid in childs2) / len(childs2))
+                # update high for current level
+                exps = [(expected[nn['id']], nn) for nn in lvl]
+                exps.sort(key=lambda x: x[0])
+                high = exps[-1][0]
 
     return graph

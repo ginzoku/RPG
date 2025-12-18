@@ -3,6 +3,9 @@ import pygame
 from ..config import settings
 from ..scenes.map_scene import MapScene # 修正
 
+# Toggle node expected-score display here (set False to disable)
+SHOW_NODE_SCORES = True
+
 class MapView:
     """マップを描画するクラス"""
     def __init__(self, screen: pygame.Surface):
@@ -75,6 +78,7 @@ class MapView:
             # draw graph onto overlay if available, otherwise draw fallback grid onto overlay
             if not fallback_grid:
                 node_positions = {}
+                expected_scores = {}
                 # 強めに縦間隔を離すため固定の行間を使う（ガッツリ離す）
                 level_margin = 100
                 level_spacing = 200  # 1行あたりの縦間隔（px） — 十分大きくしてスクロールで見渡せるようにする
@@ -94,6 +98,30 @@ class MapView:
                         cx = x + node_size // 2
                         cy = y
                         node_positions[node['id']] = (cx, cy)
+
+                # compute expected downstream scores if enabled
+                if SHOW_NODE_SCORES:
+                    # build children map
+                    children = {n['id']: [] for lvl in graph for n in lvl}
+                    for lvl_nodes in graph:
+                        for n in lvl_nodes:
+                            for p in n.get('parents', []):
+                                if p in children:
+                                    children[p].append(n['id'])
+                    # scoring
+                    score_map = {'monster': 0.0, 'event': 1.0, 'shop': 1.5, 'rest': 0.5, 'treasure': 2.0, 'elite': 3.0, 'boss': 5.0, 'start': 0.0}
+                    expected = {}
+                    for lvl_i in range(len(graph) - 1, -1, -1):
+                        for n in graph[lvl_i]:
+                            nid = n['id']
+                            base = score_map.get(n.get('type', 'monster'), 0.0)
+                            childs = children.get(nid, [])
+                            if not childs:
+                                expected[nid] = base
+                            else:
+                                exp_children = [expected[cid] for cid in childs]
+                                expected[nid] = base + (sum(exp_children) / len(exp_children))
+                    expected_scores = expected
 
                 # draw connections onto overlay
                 for lvl_idx, nodes in enumerate(graph):
@@ -137,6 +165,16 @@ class MapView:
                             continue
                         pygame.draw.circle(overlay, color, (cx, cy), r)
                         pygame.draw.circle(overlay, (30, 30, 30), (cx, cy), r, 2)
+                        # draw expected score label if enabled
+                        if SHOW_NODE_SCORES and node.get('id') in expected_scores:
+                            val = expected_scores.get(node['id'], 0.0)
+                            txt = self.font.render(f"{val:.1f}", True, (255, 255, 255))
+                            # background rect for readability
+                            tx = cx - txt.get_width() // 2
+                            ty = cy + r + 4
+                            bg = pygame.Rect(tx - 2, ty - 2, txt.get_width() + 4, txt.get_height() + 4)
+                            pygame.draw.rect(overlay, (0, 0, 0, 200), bg)
+                            overlay.blit(txt, (tx, ty))
             else:
                 # フォールバック: 縦に15個のマスを並べて描画（スクロールで見渡せる）
                 count = 15
