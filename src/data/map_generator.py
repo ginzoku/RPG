@@ -46,6 +46,10 @@ def get_default_params() -> Dict:
         'GUARANTEED_SHOPS': 3,
         # skip-node probability: mark node as 'empty' but keep it in topology
         'SKIP_NODE_PROB': 0.25,
+        # multiplicative factor for skip probability in low region (lvl < first_rest_level)
+        'SKIP_LOW_REGION_MULT': 0.6,
+        # avoid placing skips immediately after a rest row when possible
+        'AVOID_POST_REST': True,
         # minimum required non-empty steps on any start->boss path; if None, defaults to LEVELS-2
         'MIN_REQUIRED_STEPS': None,
     }
@@ -830,6 +834,10 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
     # - Skip doesn't apply to fixed treasure/rest/start/boss nodes
     # - Ensure at least params['LEVELS'] - 2 non-empty nodes on any start->boss path
     SKIP_PROB = params.get('SKIP_NODE_PROB', 0.06)
+    # optional: reduce skip probability in low region (fraction)
+    SKIP_LOW_REGION_MULT = params.get('SKIP_LOW_REGION_MULT', 0.5)
+    # do not allow skips on nodes that are immediate children of a rest node
+    AVOID_POST_REST = params.get('AVOID_POST_REST', True)
     min_required = params.get('MIN_REQUIRED_STEPS', None)
     if min_required is None:
         # use LEVELS-3 as requested
@@ -867,8 +875,20 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     stack.append(cc)
         return False
 
+    # track occupied column indices (to avoid stacking skips vertically)
+    # we'll treat column index as the node's index within its level list
+    for_lvl_len = [len(graph[l]) for l in range(len(graph))]
+    def is_col_occupied(level_idx, col_idx):
+        for li, lvl_nodes in enumerate(graph):
+            if li == level_idx:
+                continue
+            if col_idx < len(lvl_nodes):
+                if lvl_nodes[col_idx].get('type') == 'empty':
+                    return True
+        return False
+
     for lvl in range(1, LEVELS - 1):
-        for node in list(graph[lvl]):
+        for col_idx, node in list(enumerate(graph[lvl])):
             if node.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
                 continue
             parents = node.get('parents', [])
@@ -902,7 +922,25 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     break
             if ancestor_has_rest and has_descendant_rest(node['id']):
                 continue
-            if random.random() < SKIP_PROB:
+            # compute effective skip probability with level-based multiplier
+            eff_prob = SKIP_PROB
+            if node.get('level', 0) < first_rest_level:
+                eff_prob = SKIP_PROB * SKIP_LOW_REGION_MULT
+            # avoid placing if same column already has an empty elsewhere
+            if is_col_occupied(lvl, col_idx):
+                eff_prob = 0.0
+            # avoid immediate post-rest skips if configured
+            if AVOID_POST_REST:
+                is_post_rest = False
+                for pid in parents:
+                    pp = id_to_node_pre.get(pid)
+                    if pp is not None and pp.get('type') == 'rest':
+                        is_post_rest = True
+                        break
+                if is_post_rest:
+                    eff_prob = 0.0
+
+            if random.random() < eff_prob:
                 node['_orig_type'] = node.get('type')
                 node['type'] = 'empty'
                 skipped_nodes.append({'id': node['id'], 'orig_type': node['_orig_type']})
@@ -1004,10 +1042,22 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     if parent_empty:
                         continue
                     # split into low/high relative to first_rest_level
+                    # avoid immediate children of rest rows when forming candidates
+                    is_post_rest = False
+                    for pid in n.get('parents', []):
+                        pn = id_to_node_pre.get(pid)
+                        if pn is not None and pn.get('type') == 'rest':
+                            is_post_rest = True
+                            break
                     if lvl_idx < first_rest_level:
                         candidates_low.append(n)
                     else:
-                        candidates_high.append(n)
+                        if not is_post_rest:
+                            candidates_high.append(n)
+                        else:
+                            # push post-rest nodes to a separate bucket as lowest priority
+                            # they'll be considered only if forced later
+                            pass
 
             random.shuffle(candidates_low)
             random.shuffle(candidates_high)
@@ -1046,13 +1096,47 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     placed = try_place_one(candidates_low, force=True)
                 if placed:
                     need_low = 0
-            # place high if needed
+            # place high if needed: distribute across levels to avoid clustering near a single level
             if need_high:
-                placed = try_place_one(candidates_high, force=False)
-                if not placed:
-                    placed = try_place_one(candidates_high, force=True)
-                if placed:
-                    need_high = 0
+                # group candidates by level
+                lvl_buckets = {}
+                for c in candidates_high:
+                    lvl_buckets.setdefault(c.get('level', 0), []).append(c)
+                levels_sorted = sorted(lvl_buckets.keys())
+                placed = 0
+                # round-robin across levels to spread empties
+                idx = 0
+                while placed < need_high and levels_sorted:
+                    lvl_key = levels_sorted[idx % len(levels_sorted)]
+                    bucket = lvl_buckets.get(lvl_key, [])
+                    if bucket:
+                        cand = bucket.pop(random.randrange(len(bucket)))
+                        # try placing without forcing first
+                        orig = cand.get('type')
+                        cand['type'] = 'empty'
+                        new_cost = compute_min_cost()
+                        if new_cost >= min_required:
+                            placed += 1
+                        else:
+                            # revert and try forced placement in later pass
+                            cand['type'] = orig
+                    # remove empty buckets
+                    if not bucket:
+                        levels_sorted = [l for l in levels_sorted if lvl_buckets.get(l)]
+                    idx += 1
+                # if still short, try force-placing across levels (avoiding immediate post-rest where possible)
+                if placed < need_high:
+                    for lvl_key in sorted(lvl_buckets.keys()):
+                        for cands in [lvl_buckets.get(lvl_key, [])]:
+                            while cands and placed < need_high:
+                                cand = cands.pop()
+                                cand['_orig_type'] = cand.get('type')
+                                cand['type'] = 'empty'
+                                placed += 1
+                            if placed >= need_high:
+                                break
+                        if placed >= need_high:
+                            break
             # if still missing a high skip, try moving an existing low skip to high (restore low, then place high)
             if need_high:
                 low_empties = [n for lvl_idx, lvl in enumerate(graph) for n in lvl if n.get('type') == 'empty' and lvl_idx < first_rest_level]
@@ -1186,6 +1270,21 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             for n in graph[lvl_idx]:
                 if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
                     continue
+                # avoid immediate children of rest rows when possible
+                is_post_rest = False
+                for pid in n.get('parents', []):
+                    pn = None
+                    for row in graph:
+                        for pnn in row:
+                            if pnn['id'] == pid and pnn.get('type') == 'rest':
+                                is_post_rest = True
+                                break
+                        if is_post_rest:
+                            break
+                    if is_post_rest:
+                        break
+                if is_post_rest:
+                    continue
                 n['_orig_type'] = n.get('type')
                 n['type'] = 'empty'
                 placed += 1
@@ -1199,6 +1298,9 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 for n in graph[lvl_idx]:
                     if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
                         continue
+                    # as a last resort allow post-rest nodes, but prefer others
+                    if any((lambda pid: any(pn.get('id') == pid and pn.get('type') == 'rest' for row in graph for pn in row))(pid) for pid in n.get('parents', [])):
+                        continue
                     n['_orig_type'] = n.get('type')
                     n['type'] = 'empty'
                     placed += 1
@@ -1206,6 +1308,19 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                         break
                 if placed >= need:
                     break
+            # if still not enough, reluctantly place on any remaining nodes (including post-rest)
+            if placed < need:
+                for lvl_idx in range(1, LEVELS - 1):
+                    for n in graph[lvl_idx]:
+                        if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
+                            continue
+                        n['_orig_type'] = n.get('type')
+                        n['type'] = 'empty'
+                        placed += 1
+                        if placed >= need:
+                            break
+                    if placed >= need:
+                        break
 
     for lvl in range(1, LEVELS - 1):
         for n in graph[lvl]:
