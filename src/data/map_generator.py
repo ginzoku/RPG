@@ -93,6 +93,18 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     return nd
         return None
 
+    # helper: attach children entries on parent nodes for a created row
+    def attach_children_for_row(row_nodes):
+        for child in row_nodes:
+            child.setdefault('children', [])
+            for pid in child.get('parents', []):
+                parent = find_node_by_id(pid)
+                if parent is None:
+                    continue
+                parent.setdefault('children', [])
+                if child['id'] not in parent['children']:
+                    parent['children'].append(child['id'])
+
     BRANCH_WIDTH_TARGET = params.get('BRANCH_WIDTH_TARGET', 4)
     BRANCH_BOOST_PROB = params.get('BRANCH_BOOST_PROB', 0.15)
 
@@ -203,6 +215,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 for p in prev:
                     row.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': 'rest'})
                     nid += 1
+                attach_children_for_row(row)
                 graph.append(row)
                 # ensure at least 2 nodes for non-first, non-boss rows
                 if lvl != 0 and lvl != LEVELS - 1:
@@ -274,6 +287,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 if need > 0:
                     temp, nid = pairwise_merge_k(temp, need, nid)
                 row = temp
+                attach_children_for_row(row)
                 graph.append(row)
                 continue
 
@@ -302,6 +316,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     if t.get('merged_from'):
                         new_node['merged_from'] = True
                     row.append(new_node)
+            attach_children_for_row(row)
             graph.append(row)
             # ensure at least 2 nodes for non-first, non-boss rows
             if lvl != 0 and lvl != LEVELS - 1:
@@ -315,6 +330,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         if lvl == LEVELS - 1:
             row.append({'id': nid, 'level': lvl, 'parents': [p['id'] for p in prev], 'type': 'boss'})
             nid += 1
+            attach_children_for_row(row)
             graph.append(row)
             # ensure at least 2 nodes for non-first, non-boss rows
             if lvl != 0 and lvl != LEVELS - 1:
@@ -426,6 +442,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             need = len(row) - MAX_PER_ROW
             row, nid = pairwise_merge_k(row, need, nid)
 
+        attach_children_for_row(row)
         graph.append(row)
         # ensure at least 2 nodes for non-first, non-boss rows
         if lvl != 0 and lvl != LEVELS - 1:
@@ -528,7 +545,26 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                                 children_by_parent[left].remove(lc)
                             if rc in children_by_parent.get(right, []):
                                 children_by_parent[right].remove(rc)
-
+    # Ensure `children` lists mirror `parents` after any parent-edge modifications above.
+    # This prevents asymmetry where nodes have parents but their parent nodes' `children`
+    # lists were not updated during generation/postprocessing.
+    id_to_node = {}
+    for lvl_nodes in graph:
+        for n in lvl_nodes:
+            id_to_node[n['id']] = n
+            # ensure key exists
+            if 'children' not in n:
+                n['children'] = []
+    # clear and rebuild children from parents
+    for n in id_to_node.values():
+        n['children'] = []
+    for nid, n in id_to_node.items():
+        for p in n.get('parents', []):
+            if p in id_to_node:
+                parent = id_to_node[p]
+                parent.setdefault('children', [])
+                if nid not in parent['children']:
+                    parent['children'].append(nid)
     # Assign types according to MAP_LOGIC probabilities with constraints.
     # Base probabilities (per-node): monster 30%, elite 15%, event 32%, shop 8%, rest 15%
     levels_map = build_levels_map(graph)
