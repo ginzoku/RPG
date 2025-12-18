@@ -21,13 +21,13 @@ def get_default_params() -> Dict:
         # per-node type probabilities (used for lvl >= 5 rows)
         'type_probs': {'monster': 35, 'elite': 10, 'event': 32, 'shop': 8, 'rest': 15},
         # early rows (lvl < 4) allowed distribution
-        'early_probs': {'monster': 45, 'event': 43, 'shop': 8},
+        'early_probs': {'monster': 50, 'event': 42, 'shop': 8},
         # fixed special rows (0-based indices)
         'rest_rows': [5, 14],
         'treasure_rows': [9],
         # placement caps (excluding fixed/guaranteed placements)
-        'REST_CAP': 6,
-        'ELITE_EXTRA_CAP': 3,
+        'REST_CAP': 5,
+        'ELITE_EXTRA_CAP': 2,
         'SHOP_EXTRA_CAP': 3,
         # branch/boost tuning
         'ENFORCE_MONSTER_THRESHOLD': 3,
@@ -387,7 +387,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
     levels_map = build_levels_map(graph)
 
     def can_be_nonconsecutive(node, t):
-        # Prevent consecutive elite/rest along a single-parent chain
+        # Prevent consecutive elite/rest/shop along a single-parent chain
         parents = node.get('parents', [])
         if not parents:
             return True
@@ -502,7 +502,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 w = weights.get(t, 0.0)
                 if w <= 0:
                     continue
-                if t in ('elite', 'rest') and not can_be_nonconsecutive(n, t):
+                if t in ('elite', 'rest', 'shop') and not can_be_nonconsecutive(n, t):
                     # demote to zero weight if it would violate non-consecutive rule
                     continue
                 final_choices.append(t)
@@ -525,6 +525,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 candidates.append(n)
         random.shuffle(candidates)
         placed = []
+        # helper: build quick id->node map for child checks
+        id_to_node_local = {n['id']: n for lvl_nodes in graph for n in lvl_nodes}
         for c in candidates:
             if len(placed) >= count:
                 break
@@ -539,6 +541,22 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     conflict = True
                     break
             if conflict:
+                continue
+            # avoid creating consecutive same-type placements (e.g., shop after shop)
+            # check immediate parents
+            if not can_be_nonconsecutive(c, kind):
+                continue
+            # check immediate children to avoid creating parent->child same-type
+            child_conflict = False
+            for lvl_nodes in graph:
+                for nn in lvl_nodes:
+                    if c['id'] in nn.get('parents', []):
+                        if nn.get('type') == kind:
+                            child_conflict = True
+                            break
+                if child_conflict:
+                    break
+            if child_conflict:
                 continue
             c['type'] = kind
             placed.append(c)
@@ -681,7 +699,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
     SKIP_PROB = params.get('SKIP_NODE_PROB', 0.06)
     min_required = params.get('MIN_REQUIRED_STEPS', None)
     if min_required is None:
-        min_required = max(0, params.get('LEVELS', LEVELS) - 2)
+        # use LEVELS-3 as requested
+        min_required = max(0, params.get('LEVELS', LEVELS) - 3)
 
     skipped_nodes = []
     for lvl in range(1, LEVELS - 1):
@@ -770,6 +789,48 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 del node['_orig_type']
             cur_cost = compute_min_cost()
             idx -= 1
+
+        # Ensure at least 2 skips remain in the final graph (best-effort without violating min_required)
+        current_skips = sum(1 for lvl in graph for n in lvl if n.get('type') == 'empty')
+        if current_skips < 2:
+            # candidates: nodes that are not special/locked and currently non-empty
+            candidates = []
+            for lvl_idx in range(1, LEVELS - 1):
+                for n in graph[lvl_idx]:
+                    if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
+                        continue
+                    if 'locked_ids' in locals() and n['id'] in locked_ids:
+                        continue
+                    # avoid creating consecutive skips: skip if any parent is empty
+                    parent_empty = False
+                    for pid in n.get('parents', []):
+                        pn = None
+                        for lvl_nodes in graph:
+                            for nn in lvl_nodes:
+                                if nn['id'] == pid:
+                                    pn = nn
+                                    break
+                            if pn is not None:
+                                break
+                        if pn is not None and pn.get('type') == 'empty':
+                            parent_empty = True
+                            break
+                    if parent_empty:
+                        continue
+                    candidates.append(n)
+            random.shuffle(candidates)
+            for cand in candidates:
+                if current_skips >= 2:
+                    break
+                orig = cand.get('type')
+                cand['type'] = 'empty'
+                new_cost = compute_min_cost()
+                if new_cost < min_required:
+                    # revert
+                    cand['type'] = orig
+                    continue
+                current_skips += 1
+            # end candidates loop
 
     # Final pass: convert any remaining unknowns to monster
     for lvl in range(1, LEVELS - 1):
@@ -862,11 +923,18 @@ def balance_choices(graph: List[List[Dict]], params: Dict | None = None, thresho
                 continue
             # prefer promoting to shop then elite then treasure based on availability
             promoted = False
-            # try shop
+            # try shop (avoid consecutive shops along parent chain)
             if len([n for n in shop_existing if n.get('id')]) < (3 + shop_extra_cap):
-                node['type'] = 'shop'
-                shop_existing.append(node)
-                promoted = True
+                parents_ok = True
+                for pid in node.get('parents', []):
+                    pnode = id_to_node.get(pid)
+                    if pnode is not None and pnode.get('type') == 'shop':
+                        parents_ok = False
+                        break
+                if parents_ok:
+                    node['type'] = 'shop'
+                    shop_existing.append(node)
+                    promoted = True
             # else try elite
             if not promoted and len(elite_existing) < (params.get('GUARANTEED_ELITES', 3) + elite_extra_cap):
                 node['type'] = 'elite'
