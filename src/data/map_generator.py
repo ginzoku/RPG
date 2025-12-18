@@ -137,12 +137,13 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
 
     def pairwise_merge_k(nodes_list, k, next_id):
         """Merge up to k non-overlapping adjacent pairs in nodes_list.
-        Returns (new_list, new_next_id).
+        Returns (new_list, new_next_id, merge_map).
+        merge_map maps original node ids to the new merged id when merges occur.
         Each merged node will have 'id' set to next_id (incremented) and 'parents' as union.
         Selection prefers pairs with smallest combined parent set size.
         """
         if k <= 0 or len(nodes_list) < 2:
-            return nodes_list, next_id
+            return nodes_list, next_id, {}
         n = len(nodes_list)
         # build candidate pairs; only allow pairs whose parent-union size <= 2
         pairs = []  # (score, i)
@@ -174,23 +175,32 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             merges.append(i)
             chosen.add(i)
         if not merges:
-            return nodes_list, next_id
+            return nodes_list, next_id, {}
         merges_set = set(merges)
         new_list = []
         i = 0
+        merge_map = {}
         while i < n:
             if i in merges_set:
                 a = nodes_list[i]
                 b = nodes_list[i + 1]
                 merged_parents = list(set(a.get('parents', []) + b.get('parents', [])))
                 merged = {'id': next_id, 'level': a.get('level', b.get('level')), 'parents': merged_parents, 'merged_from': True}
+                # record which original ids were merged into this new id
+                try:
+                    aid = a['id']
+                    bid = b['id']
+                    merge_map[aid] = next_id
+                    merge_map[bid] = next_id
+                except Exception:
+                    pass
                 next_id += 1
                 new_list.append(merged)
                 i += 2
             else:
                 new_list.append(nodes_list[i])
                 i += 1
-        return new_list, next_id
+        return new_list, next_id, merge_map
 
     # build subsequent levels
     for lvl in range(1, LEVELS):
@@ -264,8 +274,23 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     else:
                         # try a single merge on the target level
                         need = 1
-                        new_row, nid = pairwise_merge_k(graph[target_lvl], need, nid)
+                        new_row, nid, merge_map = pairwise_merge_k(graph[target_lvl], need, nid)
                         graph[target_lvl] = new_row
+                        # if merges occurred, update parent refs in the following level
+                        if merge_map and target_lvl + 1 < len(graph):
+                            next_lvl = graph[target_lvl + 1]
+                            for child in next_lvl:
+                                new_parents = []
+                                for p in child.get('parents', []):
+                                    new_parents.append(merge_map.get(p, p))
+                                # dedupe while preserving order
+                                seen = set()
+                                dedup = []
+                                for pid in new_parents:
+                                    if pid not in seen:
+                                        seen.add(pid)
+                                        dedup.append(pid)
+                                child['parents'] = dedup
                 continue
             else:
                 # start by making one node per previous parent, then merge down to 3
@@ -276,7 +301,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 # merge adjacent until 3 remain using non-overlapping pairwise merges
                 need = len(temp) - 3
                 if need > 0:
-                    temp, nid = pairwise_merge_k(temp, need, nid)
+                    temp, nid, _ = pairwise_merge_k(temp, need, nid)
                 row = temp
                 graph.append(row)
                 continue
@@ -296,7 +321,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     temp.append({'id': None, 'parents': [p['id']]})
                 need = len(temp) - 3
                 if need > 0:
-                    temp, nid = pairwise_merge_k(temp, need, nid)
+                    temp, nid, _ = pairwise_merge_k(temp, need, nid)
                 # finalize rows
                 for t in temp:
                     if t.get('id') is None:
@@ -366,13 +391,13 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         if lvl in PRE_REST_ROWS:
             need = len(row) - 3
             if need > 0:
-                row, nid = pairwise_merge_k(row, need, nid)
+                row, nid, _ = pairwise_merge_k(row, need, nid)
 
         # deterministic rule: if prev_count == MAX_PER_ROW, force merge to 3 nodes
         if prev_count == MAX_PER_ROW:
             need = len(row) - 3
             if need > 0:
-                row, nid = pairwise_merge_k(row, need, nid)
+                row, nid, _ = pairwise_merge_k(row, need, nid)
 
         # probabilistic merges based on prev_count
         merge_chance = 0.0
@@ -428,7 +453,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         # clamp to MAX_PER_ROW using non-overlapping pairwise merges
         if len(row) > MAX_PER_ROW:
             need = len(row) - MAX_PER_ROW
-            row, nid = pairwise_merge_k(row, need, nid)
+            row, nid, _ = pairwise_merge_k(row, need, nid)
 
         graph.append(row)
         # ensure at least 2 nodes for non-first, non-boss rows
@@ -802,9 +827,20 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         it = 0
         while len(lvl_nodes) > max_per and it < iter_limit:
             need = len(lvl_nodes) - max_per
-            new_nodes, new_nid = pairwise_merge_k(lvl_nodes, need, nid)
+            new_nodes, new_nid, merge_map = pairwise_merge_k(lvl_nodes, need, nid)
             # if pairwise succeeded in reducing length, accept result
             if len(new_nodes) < len(lvl_nodes):
+                # update child parent refs for this level if needed
+                if merge_map and lvl_idx + 1 < len(graph):
+                    for child in graph[lvl_idx + 1]:
+                        new_parents = [merge_map.get(p, p) for p in child.get('parents', [])]
+                        seen = set()
+                        dedup = []
+                        for pid in new_parents:
+                            if pid not in seen:
+                                seen.add(pid)
+                                dedup.append(pid)
+                        child['parents'] = dedup
                 lvl_nodes = new_nodes
                 nid = new_nid
             else:
@@ -1383,7 +1419,198 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
 
     enforce_max_consecutive_events(graph, cap=3)
 
+    # final validation and fixes to avoid disconnected/isolated nodes
+    validate_and_fix_graph(graph)
+
     return graph
+
+
+def minimize_crossings(graph: List[List[Dict]], passes: int = 6):
+    """Iterative barycenter/median ordering (top-down and bottom-up) to reduce crossings.
+    This reorders nodes in-place in `graph`.
+    """
+    if not graph:
+        return graph
+    L = len(graph)
+    BIG = 1_000_000
+
+    def barycenter_for_children(row, next_row):
+        idx = {n['id']: i for i, n in enumerate(row)}
+        def key(n):
+            parents = n.get('parents', [])
+            vals = [idx.get(p, BIG) for p in parents]
+            if not vals:
+                return (BIG, BIG)
+            return (sum(vals) / len(vals), min(vals))
+        next_row.sort(key=key)
+
+    def barycenter_for_parents(row, next_row):
+        child_idx = {n['id']: i for i, n in enumerate(next_row)}
+        def key(n):
+            refs = []
+            for i, cn in enumerate(next_row):
+                if n['id'] in cn.get('parents', []):
+                    refs.append(i)
+            if not refs:
+                return (BIG, BIG)
+            refs.sort()
+            mid = refs[len(refs) // 2]
+            return (mid, min(refs))
+        row.sort(key=key)
+
+    for _ in range(passes):
+        # top-down pass
+        for lvl in range(0, L - 1):
+            barycenter_for_children(graph[lvl], graph[lvl + 1])
+        # bottom-up pass
+        for lvl in range(L - 1, 0, -1):
+            barycenter_for_parents(graph[lvl - 1], graph[lvl])
+    return graph
+
+
+def remove_vertical_empty_stacks(graph: List[List[Dict]], max_iters: int = 100):
+    """Attempt to avoid multiple 'empty' nodes aligned in the same column index by local swaps.
+    This reorders nodes within levels (display order) to break vertical stacks where possible.
+    """
+    if not graph:
+        return graph
+    it = 0
+    while it < max_iters:
+        it += 1
+        # build column map: col_idx -> list of (lvl_idx)
+        col_map = {}
+        changed = False
+        for lvl_idx, lvl in enumerate(graph):
+            for col_idx, n in enumerate(lvl):
+                if n.get('type') == 'empty':
+                    col_map.setdefault(col_idx, []).append(lvl_idx)
+        # find any column with >1 empties
+        conflict_cols = [c for c, lvls in col_map.items() if len(lvls) > 1]
+        if not conflict_cols:
+            break
+        for c in conflict_cols:
+            lvls = col_map[c]
+            # resolve conflicts by swapping node within its level with neighbor where possible
+            for lvl_idx in lvls[1:]:
+                lvl = graph[lvl_idx]
+                col_idx = c
+                swapped = False
+                # prefer swapping toward center (try left then right)
+                for ni in (col_idx - 1, col_idx + 1):
+                    if 0 <= ni < len(lvl):
+                        lvl[col_idx], lvl[ni] = lvl[ni], lvl[col_idx]
+                        changed = True
+                        swapped = True
+                        break
+                if not swapped:
+                    continue
+        if not changed:
+            break
+    return graph
+
+
+def ensure_parents_have_children(graph: List[List[Dict]]):
+    """Ensure every parent node (except in the boss level) has at least one child.
+    If a parent has no children in the next level, try to attach it to an existing child
+    (prefer child with few parents), otherwise create a new child node in the next level.
+    """
+    if not graph:
+        return graph
+    L = len(graph)
+    nid_max = max(n['id'] for lvl in graph for n in lvl) + 1
+    for lvl in range(0, L - 1):
+        next_row = graph[lvl + 1]
+        for p in list(graph[lvl]):
+            children = [n for n in next_row if p['id'] in n.get('parents', [])]
+            if children:
+                continue
+            # find candidate child to adopt this parent
+            best = None
+            best_score = 999
+            for idx, c in enumerate(next_row):
+                par_count = len(c.get('parents', []))
+                # prefer child with <2 parents
+                score = par_count
+                if par_count < 2 and score < best_score:
+                    best = c
+                    best_score = score
+            if best is not None:
+                # attach parent id to this child
+                best['parents'] = list(dict.fromkeys(best.get('parents', []) + [p['id']]))
+            else:
+                # create new child node anchored to this parent
+                new_node = {'id': nid_max, 'level': lvl + 1, 'parents': [p['id']], 'type': 'monster'}
+                nid_max += 1
+                # insert near middle of next_row
+                insert_at = max(0, len(next_row) // 2)
+                next_row.insert(insert_at, new_node)
+    return graph
+
+
+def validate_and_fix_graph(graph: List[List[Dict]]):
+    """Post-generation validation: fix dangling parents, isolated nodes, and ensure connectivity.
+    Modifies graph in-place.
+    """
+    if not graph:
+        return graph
+    L = len(graph)
+
+    # helper maps
+    id_to_level_index = {}
+    for lvl_idx, lvl in enumerate(graph):
+        for idx, n in enumerate(lvl):
+            id_to_level_index[n['id']] = (lvl_idx, idx)
+
+    # fix children' parents that reference ids not in previous level
+    for lvl in range(1, L):
+        prev_ids = [n['id'] for n in graph[lvl - 1]]
+        prev_pos = {n['id']: i for i, n in enumerate(graph[lvl - 1])}
+        for node in graph[lvl]:
+            parents = node.get('parents', [])
+            # keep only parents that exist in prev_ids
+            valid = [p for p in parents if p in prev_ids]
+            if valid:
+                node['parents'] = valid
+                continue
+            # no valid parents: pick closest prev node by index similarity if possible
+            # fallback: choose the prev node with fewest children
+            best = None
+            best_child_count = 1_000_000
+            for p in graph[lvl - 1]:
+                child_count = sum(1 for c in graph[lvl] if p['id'] in c.get('parents', []))
+                if child_count < best_child_count:
+                    best_child_count = child_count
+                    best = p
+            if best is not None:
+                node['parents'] = [best['id']]
+
+    # ensure every parent has at least one child (may add child)
+    ensure_parents_have_children(graph)
+
+    # ensure no node (except start/boss) is isolated (no parents and no children)
+    id_to_node = {n['id']: n for lvl in graph for n in lvl}
+    children = {nid: [] for nid in id_to_node}
+    for lvl_nodes in graph:
+        for n in lvl_nodes:
+            for p in n.get('parents', []):
+                if p in children:
+                    children[p].append(n['id'])
+
+    for lvl_idx in range(1, L - 1):
+        for n in graph[lvl_idx]:
+            par = n.get('parents', [])
+            ch = children.get(n['id'], [])
+            if not par and not ch:
+                # attach to a nearby parent in prev level
+                prev_lvl = graph[lvl_idx - 1]
+                if prev_lvl:
+                    # pick prev node with fewest children
+                    best = min(prev_lvl, key=lambda p: len(children.get(p['id'], [])))
+                    n['parents'] = [best['id']]
+                    children[best['id']].append(n['id'])
+
+    return graph
+
 
 
 def balance_choices(graph: List[List[Dict]], params: Dict | None = None, threshold: float = 2.0) -> List[List[Dict]]:
