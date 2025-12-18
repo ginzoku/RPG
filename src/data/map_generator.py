@@ -44,6 +44,10 @@ def get_default_params() -> Dict:
         # guaranteed counts
         'GUARANTEED_ELITES': 3,
         'GUARANTEED_SHOPS': 3,
+        # skip-node probability: mark node as 'empty' but keep it in topology
+        'SKIP_NODE_PROB': 0.25,
+        # minimum required non-empty steps on any start->boss path; if None, defaults to LEVELS-2
+        'MIN_REQUIRED_STEPS': None,
     }
 
 
@@ -670,6 +674,102 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             nid += 1
             lvl_nodes = lvl_nodes[:-2] + [merged]
         graph[lvl_idx] = lvl_nodes
+
+    # Optional skip-node rule: mark nodes as 'empty' (skip) but keep them in the graph topology.
+    # - Skip doesn't apply to fixed treasure/rest/start/boss nodes
+    # - Ensure at least params['LEVELS'] - 2 non-empty nodes on any start->boss path
+    SKIP_PROB = params.get('SKIP_NODE_PROB', 0.06)
+    min_required = params.get('MIN_REQUIRED_STEPS', None)
+    if min_required is None:
+        min_required = max(0, params.get('LEVELS', LEVELS) - 2)
+
+    skipped_nodes = []
+    for lvl in range(1, LEVELS - 1):
+        for node in list(graph[lvl]):
+            if node.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
+                continue
+            # avoid creating consecutive skips along the same branch: if any parent is already 'empty', do not skip
+            parents = node.get('parents', [])
+            parent_empty = False
+            for pid in parents:
+                pnode = None
+                for lvl_nodes in graph:
+                    for nn in lvl_nodes:
+                        if nn['id'] == pid:
+                            pnode = nn
+                            break
+                    if pnode is not None:
+                        break
+                if pnode is not None and pnode.get('type') == 'empty':
+                    parent_empty = True
+                    break
+            if parent_empty:
+                continue
+            if random.random() < SKIP_PROB:
+                node['_orig_type'] = node.get('type')
+                node['type'] = 'empty'
+                skipped_nodes.append({'id': node['id'], 'orig_type': node['_orig_type']})
+
+    # If any skips happened, ensure minimal non-empty nodes along any start->boss path
+    if skipped_nodes:
+        id_to_node = {n['id']: n for lvl in graph for n in lvl}
+        children = {nid: [] for nid in id_to_node}
+        for lvl_nodes in graph:
+            for n in lvl_nodes:
+                for p in n.get('parents', []):
+                    if p in children:
+                        children[p].append(n['id'])
+
+        import heapq
+
+        def min_nonempty_cost(start_id, target_ids):
+            pq = [(0, start_id)]
+            best = {start_id: 0}
+            while pq:
+                cost, nid = heapq.heappop(pq)
+                if nid in target_ids:
+                    return cost
+                if cost != best.get(nid, 1e9):
+                    continue
+                for c in children.get(nid, []):
+                    node_c = id_to_node.get(c)
+                    if node_c is None:
+                        continue
+                    add = 0 if node_c.get('type') == 'empty' else 1
+                    newc = cost + add
+                    if newc < best.get(c, 1e9):
+                        best[c] = newc
+                        heapq.heappush(pq, (newc, c))
+            return None
+
+        start_ids = [n['id'] for n in graph[0]]
+        boss_ids = [n['id'] for lvl in graph for n in lvl if n.get('type') == 'boss']
+
+        def compute_min_cost():
+            min_cost = None
+            for s in start_ids:
+                c = min_nonempty_cost(s, set(boss_ids))
+                if c is None:
+                    continue
+                if min_cost is None or c < min_cost:
+                    min_cost = c
+            return 0 if min_cost is None else min_cost
+
+        cur_cost = compute_min_cost()
+        idx = len(skipped_nodes) - 1
+        while cur_cost < min_required and idx >= 0:
+            rec = skipped_nodes[idx]
+            nid = rec['id']
+            node = id_to_node.get(nid)
+            if node is None or node.get('type') != 'empty':
+                idx -= 1
+                continue
+            # restore node
+            node['type'] = node.get('_orig_type', rec.get('orig_type', 'monster'))
+            if '_orig_type' in node:
+                del node['_orig_type']
+            cur_cost = compute_min_cost()
+            idx -= 1
 
     # Final pass: convert any remaining unknowns to monster
     for lvl in range(1, LEVELS - 1):

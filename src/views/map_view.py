@@ -99,6 +99,9 @@ class MapView:
                         cy = y
                         node_positions[node['id']] = (cx, cy)
 
+                    # build id->node map for quick type checks when drawing
+                    id_to_node = {n['id']: n for lvl_nodes in graph for n in lvl_nodes}
+
                 # compute expected downstream scores if enabled
                 if SHOW_NODE_SCORES:
                     # build children map
@@ -123,30 +126,91 @@ class MapView:
                                 expected[nid] = base + (sum(exp_children) / len(exp_children))
                     expected_scores = expected
 
+                # build children map for extra skip-connections
+                children_map = {n['id']: [] for lvl in graph for n in lvl}
+                for lvl_nodes in graph:
+                    for n in lvl_nodes:
+                        for p in n.get('parents', []):
+                            if p in children_map:
+                                children_map[p].append(n['id'])
+
                 # draw connections onto overlay
+                # For each visible node, draw lines from the nearest visible ancestor (skip empty nodes)
                 for lvl_idx, nodes in enumerate(graph):
                     for node in nodes:
+                        if node.get('type') == 'empty':
+                            continue
                         parents = node.get('parents', [])
                         for p in parents:
-                            if p in node_positions and node['id'] in node_positions:
-                                x1, y1 = node_positions[p]
-                                x2, y2 = node_positions[node['id']]
-                                # skip drawing if completely off-screen vertically
-                                if (y1 < -100 and y2 < -100) or (y1 > settings.SCREEN_HEIGHT + 100 and y2 > settings.SCREEN_HEIGHT + 100):
-                                    continue
-                                # draw shorter connection (stop at node radii) and thinner line for compact view
-                                r = node_size // 2
-                                dx = x2 - x1
-                                dy = y2 - y1
-                                dist = (dx * dx + dy * dy) ** 0.5
-                                if dist > 0:
-                                    sx = x1 + dx * (r / dist)
-                                    sy = y1 + dy * (r / dist)
-                                    ex = x2 - dx * (r / dist)
-                                    ey = y2 - dy * (r / dist)
-                                    pygame.draw.line(overlay, (140, 140, 140), (int(sx), int(sy)), (int(ex), int(ey)), 3)
-                                else:
-                                    pygame.draw.line(overlay, (140, 140, 140), (x1, y1), (x2, y2), 3)
+                            # find nearest visible ancestor for parent id p
+                            src_id = p
+                            # guard: if parent id not present in id_to_node, skip
+                            if src_id not in id_to_node:
+                                continue
+                            # walk upward until a non-empty node or no parents
+                            visited = set()
+                            while True:
+                                pn = id_to_node.get(src_id)
+                                if pn is None:
+                                    break
+                                if pn.get('type') != 'empty':
+                                    break
+                                # avoid infinite loops
+                                if src_id in visited:
+                                    break
+                                visited.add(src_id)
+                                parents_up = pn.get('parents', [])
+                                if not parents_up:
+                                    break
+                                src_id = parents_up[0]
+                            if src_id not in node_positions or node['id'] not in node_positions:
+                                continue
+                            x1, y1 = node_positions[src_id]
+                            x2, y2 = node_positions[node['id']]
+                            # skip drawing if completely off-screen vertically
+                            if (y1 < -100 and y2 < -100) or (y1 > settings.SCREEN_HEIGHT + 100 and y2 > settings.SCREEN_HEIGHT + 100):
+                                continue
+                            # draw shorter connection (stop at node radii) and thinner line for compact view
+                            r = node_size // 2
+                            dx = x2 - x1
+                            dy = y2 - y1
+                            dist = (dx * dx + dy * dy) ** 0.5
+                            if dist > 0:
+                                sx = x1 + dx * (r / dist)
+                                sy = y1 + dy * (r / dist)
+                                ex = x2 - dx * (r / dist)
+                                ey = y2 - dy * (r / dist)
+                                pygame.draw.line(overlay, (140, 140, 140), (int(sx), int(sy)), (int(ex), int(ey)), 3)
+                            else:
+                                pygame.draw.line(overlay, (140, 140, 140), (x1, y1), (x2, y2), 3)
+
+                # If a node is skipped (type == 'empty'), draw visual connectors from its parents to its children
+                # so the path does not appear broken. These are drawn beneath normal connections.
+                for lvl_idx, nodes in enumerate(graph):
+                    for node in nodes:
+                        if node.get('type') != 'empty':
+                            continue
+                        e_id = node['id']
+                        parents = node.get('parents', [])
+                        children = children_map.get(e_id, [])
+                        for p in parents:
+                            for c in children:
+                                if p in node_positions and c in node_positions:
+                                    x1, y1 = node_positions[p]
+                                    x2, y2 = node_positions[c]
+                                    # shorten by radius
+                                    r = node_size // 2
+                                    dx = x2 - x1
+                                    dy = y2 - y1
+                                    dist = (dx * dx + dy * dy) ** 0.5
+                                    if dist > 0:
+                                        sx = x1 + dx * (r / dist)
+                                        sy = y1 + dy * (r / dist)
+                                        ex = x2 - dx * (r / dist)
+                                        ey = y2 - dy * (r / dist)
+                                        pygame.draw.line(overlay, (120, 120, 120), (int(sx), int(sy)), (int(ex), int(ey)), 2)
+                                    else:
+                                        pygame.draw.line(overlay, (120, 120, 120), (x1, y1), (x2, y2), 2)
 
                 # draw nodes onto overlay (after connections so nodes overlay lines)
                 for lvl_idx, nodes in enumerate(graph):
@@ -157,6 +221,9 @@ class MapView:
                         cx, cy = pos
                         r = node_size // 2
                         t = node.get('type', 'normal')
+                        # do not draw skipped nodes
+                        if t == 'empty':
+                            continue
                         if t == 'elite':
                             color = (80, 180, 80)
                         elif t == 'shop':
