@@ -24,3 +24,11 @@ wheels/
 .env
 venv/
 src/BluePrint
+tools/last_map_dump.json
+tools/map_screenshot.png
+tools/one_check.py
+tools/render_map_png.py
+tools/revert_map_view_connectors.py
+tools/sample_report.json
+tools/seed_22372363_dump.json
+tools/validate_dump.py

@@ -46,10 +46,6 @@ def get_default_params() -> Dict:
         'GUARANTEED_SHOPS': 3,
         # skip-node probability: mark node as 'empty' but keep it in topology
         'SKIP_NODE_PROB': 0.25,
-        # multiplicative factor for skip probability in low region (lvl < first_rest_level)
-        'SKIP_LOW_REGION_MULT': 0.6,
-        # avoid placing skips immediately after a rest row when possible
-        'AVOID_POST_REST': True,
         # minimum required non-empty steps on any start->boss path; if None, defaults to LEVELS-2
         'MIN_REQUIRED_STEPS': None,
     }
@@ -137,13 +133,12 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
 
     def pairwise_merge_k(nodes_list, k, next_id):
         """Merge up to k non-overlapping adjacent pairs in nodes_list.
-        Returns (new_list, new_next_id, merge_map).
-        merge_map maps original node ids to the new merged id when merges occur.
+        Returns (new_list, new_next_id).
         Each merged node will have 'id' set to next_id (incremented) and 'parents' as union.
         Selection prefers pairs with smallest combined parent set size.
         """
         if k <= 0 or len(nodes_list) < 2:
-            return nodes_list, next_id, {}
+            return nodes_list, next_id
         n = len(nodes_list)
         # build candidate pairs; only allow pairs whose parent-union size <= 2
         pairs = []  # (score, i)
@@ -175,32 +170,23 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             merges.append(i)
             chosen.add(i)
         if not merges:
-            return nodes_list, next_id, {}
+            return nodes_list, next_id
         merges_set = set(merges)
         new_list = []
         i = 0
-        merge_map = {}
         while i < n:
             if i in merges_set:
                 a = nodes_list[i]
                 b = nodes_list[i + 1]
                 merged_parents = list(set(a.get('parents', []) + b.get('parents', [])))
                 merged = {'id': next_id, 'level': a.get('level', b.get('level')), 'parents': merged_parents, 'merged_from': True}
-                # record which original ids were merged into this new id
-                try:
-                    aid = a['id']
-                    bid = b['id']
-                    merge_map[aid] = next_id
-                    merge_map[bid] = next_id
-                except Exception:
-                    pass
                 next_id += 1
                 new_list.append(merged)
                 i += 2
             else:
                 new_list.append(nodes_list[i])
                 i += 1
-        return new_list, next_id, merge_map
+        return new_list, next_id
 
     # build subsequent levels
     for lvl in range(1, LEVELS):
@@ -231,7 +217,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     return sum(1 for c in next_level_nodes if node_id in c.get('parents', []))
 
                 # Prevent very long pure-linear runs (no branch/no-merge) of length LINEAR_RUN
-                LINEAR_RUN = 3
+                LINEAR_RUN = 4
                 for start_lvl in range(1, max(1, LEVELS - LINEAR_RUN - 1)):
                     end_lvl = start_lvl + LINEAR_RUN - 1
                     target_lvl = end_lvl + 1
@@ -274,23 +260,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     else:
                         # try a single merge on the target level
                         need = 1
-                        new_row, nid, merge_map = pairwise_merge_k(graph[target_lvl], need, nid)
+                        new_row, nid = pairwise_merge_k(graph[target_lvl], need, nid)
                         graph[target_lvl] = new_row
-                        # if merges occurred, update parent refs in the following level
-                        if merge_map and target_lvl + 1 < len(graph):
-                            next_lvl = graph[target_lvl + 1]
-                            for child in next_lvl:
-                                new_parents = []
-                                for p in child.get('parents', []):
-                                    new_parents.append(merge_map.get(p, p))
-                                # dedupe while preserving order
-                                seen = set()
-                                dedup = []
-                                for pid in new_parents:
-                                    if pid not in seen:
-                                        seen.add(pid)
-                                        dedup.append(pid)
-                                child['parents'] = dedup
                 continue
             else:
                 # start by making one node per previous parent, then merge down to 3
@@ -301,7 +272,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 # merge adjacent until 3 remain using non-overlapping pairwise merges
                 need = len(temp) - 3
                 if need > 0:
-                    temp, nid, _ = pairwise_merge_k(temp, need, nid)
+                    temp, nid = pairwise_merge_k(temp, need, nid)
                 row = temp
                 graph.append(row)
                 continue
@@ -321,7 +292,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     temp.append({'id': None, 'parents': [p['id']]})
                 need = len(temp) - 3
                 if need > 0:
-                    temp, nid, _ = pairwise_merge_k(temp, need, nid)
+                    temp, nid = pairwise_merge_k(temp, need, nid)
                 # finalize rows
                 for t in temp:
                     if t.get('id') is None:
@@ -391,13 +362,13 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         if lvl in PRE_REST_ROWS:
             need = len(row) - 3
             if need > 0:
-                row, nid, _ = pairwise_merge_k(row, need, nid)
+                row, nid = pairwise_merge_k(row, need, nid)
 
         # deterministic rule: if prev_count == MAX_PER_ROW, force merge to 3 nodes
         if prev_count == MAX_PER_ROW:
             need = len(row) - 3
             if need > 0:
-                row, nid, _ = pairwise_merge_k(row, need, nid)
+                row, nid = pairwise_merge_k(row, need, nid)
 
         # probabilistic merges based on prev_count
         merge_chance = 0.0
@@ -453,7 +424,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         # clamp to MAX_PER_ROW using non-overlapping pairwise merges
         if len(row) > MAX_PER_ROW:
             need = len(row) - MAX_PER_ROW
-            row, nid, _ = pairwise_merge_k(row, need, nid)
+            row, nid = pairwise_merge_k(row, need, nid)
 
         graph.append(row)
         # ensure at least 2 nodes for non-first, non-boss rows
@@ -473,54 +444,90 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         next_row = graph[lvl + 1]
         # build parent index map for current row
         idx_map = {n['id']: i for i, n in enumerate(row)}
-
-        # compute representative parent position (barycenter) for each child
-        BIG = 1_000_000
-        def parent_rep(node):
+        # compute key for each node in next_row as min index of its parents (fallback large)
+        def parent_key(node):
             ps = node.get('parents', [])
-            keys = [idx_map.get(p, BIG) for p in ps]
+            keys = sorted(idx_map.get(p, 1_000_000) for p in ps)
             if not keys:
-                return (BIG, BIG, BIG)
-            mn = min(keys)
-            mx = max(keys)
-            avg = sum(keys) / len(keys)
-            return (avg, mn, mx)
-
-        # initial sort by barycenter (avg), then min, then max
-        sorted_next = sorted(next_row, key=lambda n: parent_rep(n))
-
-        # local improvement: try adjacent swaps if they reduce crossings between row and next_row
-        def count_inversions(order):
-            # order: list of child nodes; compute parent_reps in that order and count inversions
-            reps = [parent_rep(n)[1] for n in order]  # use min parent index for inversion test
-            inv = 0
-            for i in range(len(reps)):
-                for j in range(i + 1, len(reps)):
-                    if reps[i] > reps[j]:
-                        inv += 1
-            return inv
-
-        improved = True
-        # limit iterations to avoid pathological loops
-        iter_limit = max(10, len(sorted_next) * 3)
-        it = 0
-        while improved and it < iter_limit:
-            improved = False
-            it += 1
-            for i in range(len(sorted_next) - 1):
-                cur_inv = count_inversions(sorted_next)
-                # test swap
-                sorted_next[i], sorted_next[i + 1] = sorted_next[i + 1], sorted_next[i]
-                new_inv = count_inversions(sorted_next)
-                if new_inv < cur_inv:
-                    improved = True
-                    break
-                # revert
-                sorted_next[i], sorted_next[i + 1] = sorted_next[i + 1], sorted_next[i]
-
-        # apply ordering
+                return (1_000_000, 1_000_000, 1_000_000)
+            # prioritize min parent index, then median, then max as tiebreakers
+            mn = keys[0]
+            md = keys[len(keys) // 2]
+            mx = keys[-1]
+            return (mn, md, mx)
+        # stable sort next_row by parent_key to ensure monotonic parent positions
+        sorted_next = sorted(next_row, key=parent_key)
+        # if ordering changed, apply
         if sorted_next != next_row:
             graph[lvl + 1] = sorted_next
+
+        # Additional step: detect any remaining crossing edges between this row and next_row.
+        # For each adjacent pair of parent nodes in `row`, if any child of the left parent
+        # appears to the right of any child of the right parent (in next_row order), that's a crossing.
+        # Resolve each crossing by removing either the left parent's right-down branch
+        # (i.e. remove left parent from that child's parents) or the right parent's left-down branch,
+        # chosen with 50/50 probability. If removing the chosen edge would orphan the child
+        # (leave it with zero parents), attempt the other edge; if both would orphan, skip.
+        import random as _rand
+        # build position map for nodes in next_row
+        pos_map = {n['id']: i for i, n in enumerate(graph[lvl + 1])}
+        # build children lists per parent for this adjacency
+        children_by_parent = {n['id']: [] for n in row}
+        for child in graph[lvl + 1]:
+            for p in child.get('parents', []):
+                if p in children_by_parent:
+                    children_by_parent[p].append(child['id'])
+
+        # iterate adjacent parent pairs
+        for i in range(len(row) - 1):
+            left = row[i]['id']
+            right = row[i + 1]['id']
+            left_children = children_by_parent.get(left, [])
+            right_children = children_by_parent.get(right, [])
+            if not left_children or not right_children:
+                continue
+            # check all pairs for crossing
+            for lc in list(left_children):
+                for rc in list(right_children):
+                    if lc not in pos_map or rc not in pos_map:
+                        continue
+                    if pos_map[lc] > pos_map[rc]:
+                        # crossing detected between edge left->lc and right->rc
+                        # pick one to remove with 50/50 chance
+                        choice = _rand.choice([0, 1])
+                        removed = False
+                        # helper to try removal
+                        def try_remove(parent_id, child_id):
+                            child_node = None
+                            for n in graph[lvl + 1]:
+                                if n['id'] == child_id:
+                                    child_node = n
+                                    break
+                            if child_node is None:
+                                return False
+                            parents = child_node.get('parents', [])
+                            if parent_id not in parents:
+                                return False
+                            if len(parents) <= 1:
+                                return False
+                            parents.remove(parent_id)
+                            return True
+
+                        if choice == 0:
+                            # try remove left->lc
+                            removed = try_remove(left, lc)
+                            if not removed:
+                                removed = try_remove(right, rc)
+                        else:
+                            removed = try_remove(right, rc)
+                            if not removed:
+                                removed = try_remove(left, lc)
+                        if removed:
+                            # update local children_by_parent and pos_map not strictly necessary
+                            if lc in children_by_parent.get(left, []):
+                                children_by_parent[left].remove(lc)
+                            if rc in children_by_parent.get(right, []):
+                                children_by_parent[right].remove(rc)
 
     # Assign types according to MAP_LOGIC probabilities with constraints.
     # Base probabilities (per-node): monster 30%, elite 15%, event 32%, shop 8%, rest 15%
@@ -599,18 +606,6 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     cur = get_node_by_id(parents[0])
                 return length
 
-            # compute consecutive events along a single-parent chain (take max over parents)
-            def consecutive_events_from_parent(pid):
-                length = 0
-                cur = get_node_by_id(pid)
-                while cur is not None and cur.get('type') == 'event':
-                    length += 1
-                    parents = cur.get('parents', [])
-                    if not parents:
-                        break
-                    cur = get_node_by_id(parents[0])
-                return length
-
             # boost rest likelihood if this node follows long monster runs or an elite parent
             if 'rest' in weights:
                 # check each parent chain for long monster runs
@@ -657,16 +652,6 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 if t in ('elite', 'rest', 'shop') and not can_be_nonconsecutive(n, t):
                     # demote to zero weight if it would violate non-consecutive rule
                     continue
-                # prevent creating a 4th consecutive 'event' along a single-parent chain
-                if t == 'event':
-                    max_event_run = 0
-                    for pid in n.get('parents', []):
-                        run = consecutive_events_from_parent(pid)
-                        if run > max_event_run:
-                            max_event_run = run
-                    # if upstream run is already 3 or more, disallow another event (limit to 3)
-                    if max_event_run >= 3:
-                        continue
                 final_choices.append(t)
                 final_weights.append(w)
 
@@ -827,20 +812,9 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         it = 0
         while len(lvl_nodes) > max_per and it < iter_limit:
             need = len(lvl_nodes) - max_per
-            new_nodes, new_nid, merge_map = pairwise_merge_k(lvl_nodes, need, nid)
+            new_nodes, new_nid = pairwise_merge_k(lvl_nodes, need, nid)
             # if pairwise succeeded in reducing length, accept result
             if len(new_nodes) < len(lvl_nodes):
-                # update child parent refs for this level if needed
-                if merge_map and lvl_idx + 1 < len(graph):
-                    for child in graph[lvl_idx + 1]:
-                        new_parents = [merge_map.get(p, p) for p in child.get('parents', [])]
-                        seen = set()
-                        dedup = []
-                        for pid in new_parents:
-                            if pid not in seen:
-                                seen.add(pid)
-                                dedup.append(pid)
-                        child['parents'] = dedup
                 lvl_nodes = new_nodes
                 nid = new_nid
             else:
@@ -870,10 +844,6 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
     # - Skip doesn't apply to fixed treasure/rest/start/boss nodes
     # - Ensure at least params['LEVELS'] - 2 non-empty nodes on any start->boss path
     SKIP_PROB = params.get('SKIP_NODE_PROB', 0.06)
-    # optional: reduce skip probability in low region (fraction)
-    SKIP_LOW_REGION_MULT = params.get('SKIP_LOW_REGION_MULT', 0.5)
-    # do not allow skips on nodes that are immediate children of a rest node
-    AVOID_POST_REST = params.get('AVOID_POST_REST', True)
     min_required = params.get('MIN_REQUIRED_STEPS', None)
     if min_required is None:
         # use LEVELS-3 as requested
@@ -911,20 +881,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     stack.append(cc)
         return False
 
-    # track occupied column indices (to avoid stacking skips vertically)
-    # we'll treat column index as the node's index within its level list
-    for_lvl_len = [len(graph[l]) for l in range(len(graph))]
-    def is_col_occupied(level_idx, col_idx):
-        for li, lvl_nodes in enumerate(graph):
-            if li == level_idx:
-                continue
-            if col_idx < len(lvl_nodes):
-                if lvl_nodes[col_idx].get('type') == 'empty':
-                    return True
-        return False
-
     for lvl in range(1, LEVELS - 1):
-        for col_idx, node in list(enumerate(graph[lvl])):
+        for node in list(graph[lvl]):
             if node.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
                 continue
             parents = node.get('parents', [])
@@ -958,25 +916,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     break
             if ancestor_has_rest and has_descendant_rest(node['id']):
                 continue
-            # compute effective skip probability with level-based multiplier
-            eff_prob = SKIP_PROB
-            if node.get('level', 0) < first_rest_level:
-                eff_prob = SKIP_PROB * SKIP_LOW_REGION_MULT
-            # avoid placing if same column already has an empty elsewhere
-            if is_col_occupied(lvl, col_idx):
-                eff_prob = 0.0
-            # avoid immediate post-rest skips if configured
-            if AVOID_POST_REST:
-                is_post_rest = False
-                for pid in parents:
-                    pp = id_to_node_pre.get(pid)
-                    if pp is not None and pp.get('type') == 'rest':
-                        is_post_rest = True
-                        break
-                if is_post_rest:
-                    eff_prob = 0.0
-
-            if random.random() < eff_prob:
+            if random.random() < SKIP_PROB:
                 node['_orig_type'] = node.get('type')
                 node['type'] = 'empty'
                 skipped_nodes.append({'id': node['id'], 'orig_type': node['_orig_type']})
@@ -1078,22 +1018,10 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     if parent_empty:
                         continue
                     # split into low/high relative to first_rest_level
-                    # avoid immediate children of rest rows when forming candidates
-                    is_post_rest = False
-                    for pid in n.get('parents', []):
-                        pn = id_to_node_pre.get(pid)
-                        if pn is not None and pn.get('type') == 'rest':
-                            is_post_rest = True
-                            break
                     if lvl_idx < first_rest_level:
                         candidates_low.append(n)
                     else:
-                        if not is_post_rest:
-                            candidates_high.append(n)
-                        else:
-                            # push post-rest nodes to a separate bucket as lowest priority
-                            # they'll be considered only if forced later
-                            pass
+                        candidates_high.append(n)
 
             random.shuffle(candidates_low)
             random.shuffle(candidates_high)
@@ -1132,47 +1060,13 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     placed = try_place_one(candidates_low, force=True)
                 if placed:
                     need_low = 0
-            # place high if needed: distribute across levels to avoid clustering near a single level
+            # place high if needed
             if need_high:
-                # group candidates by level
-                lvl_buckets = {}
-                for c in candidates_high:
-                    lvl_buckets.setdefault(c.get('level', 0), []).append(c)
-                levels_sorted = sorted(lvl_buckets.keys())
-                placed = 0
-                # round-robin across levels to spread empties
-                idx = 0
-                while placed < need_high and levels_sorted:
-                    lvl_key = levels_sorted[idx % len(levels_sorted)]
-                    bucket = lvl_buckets.get(lvl_key, [])
-                    if bucket:
-                        cand = bucket.pop(random.randrange(len(bucket)))
-                        # try placing without forcing first
-                        orig = cand.get('type')
-                        cand['type'] = 'empty'
-                        new_cost = compute_min_cost()
-                        if new_cost >= min_required:
-                            placed += 1
-                        else:
-                            # revert and try forced placement in later pass
-                            cand['type'] = orig
-                    # remove empty buckets
-                    if not bucket:
-                        levels_sorted = [l for l in levels_sorted if lvl_buckets.get(l)]
-                    idx += 1
-                # if still short, try force-placing across levels (avoiding immediate post-rest where possible)
-                if placed < need_high:
-                    for lvl_key in sorted(lvl_buckets.keys()):
-                        for cands in [lvl_buckets.get(lvl_key, [])]:
-                            while cands and placed < need_high:
-                                cand = cands.pop()
-                                cand['_orig_type'] = cand.get('type')
-                                cand['type'] = 'empty'
-                                placed += 1
-                            if placed >= need_high:
-                                break
-                        if placed >= need_high:
-                            break
+                placed = try_place_one(candidates_high, force=False)
+                if not placed:
+                    placed = try_place_one(candidates_high, force=True)
+                if placed:
+                    need_high = 0
             # if still missing a high skip, try moving an existing low skip to high (restore low, then place high)
             if need_high:
                 low_empties = [n for lvl_idx, lvl in enumerate(graph) for n in lvl if n.get('type') == 'empty' and lvl_idx < first_rest_level]
@@ -1306,21 +1200,6 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             for n in graph[lvl_idx]:
                 if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
                     continue
-                # avoid immediate children of rest rows when possible
-                is_post_rest = False
-                for pid in n.get('parents', []):
-                    pn = None
-                    for row in graph:
-                        for pnn in row:
-                            if pnn['id'] == pid and pnn.get('type') == 'rest':
-                                is_post_rest = True
-                                break
-                        if is_post_rest:
-                            break
-                    if is_post_rest:
-                        break
-                if is_post_rest:
-                    continue
                 n['_orig_type'] = n.get('type')
                 n['type'] = 'empty'
                 placed += 1
@@ -1334,9 +1213,6 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 for n in graph[lvl_idx]:
                     if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
                         continue
-                    # as a last resort allow post-rest nodes, but prefer others
-                    if any((lambda pid: any(pn.get('id') == pid and pn.get('type') == 'rest' for row in graph for pn in row))(pid) for pid in n.get('parents', [])):
-                        continue
                     n['_orig_type'] = n.get('type')
                     n['type'] = 'empty'
                     placed += 1
@@ -1344,335 +1220,13 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                         break
                 if placed >= need:
                     break
-            # if still not enough, reluctantly place on any remaining nodes (including post-rest)
-            if placed < need:
-                for lvl_idx in range(1, LEVELS - 1):
-                    for n in graph[lvl_idx]:
-                        if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
-                            continue
-                        n['_orig_type'] = n.get('type')
-                        n['type'] = 'empty'
-                        placed += 1
-                        if placed >= need:
-                            break
-                    if placed >= need:
-                        break
 
     for lvl in range(1, LEVELS - 1):
         for n in graph[lvl]:
             if 'type' not in n or n['type'] is None:
                 n['type'] = 'monster'
 
-    # Post-process: enforce maximum consecutive 'event' nodes along any start->boss path
-    def enforce_max_consecutive_events(graph, cap=3):
-        id_to_node = {n['id']: n for lvl in graph for n in lvl}
-        children = {nid: [] for nid in id_to_node}
-        for lvl_nodes in graph:
-            for n in lvl_nodes:
-                for p in n.get('parents', []):
-                    if p in children:
-                        children[p].append(n['id'])
-
-        changed = True
-        while changed:
-            changed = False
-
-            def dfs(nid, cur_run, visited):
-                nonlocal changed
-                if nid in visited:
-                    return
-                visited.add(nid)
-                node = id_to_node.get(nid)
-                if node is None:
-                    visited.remove(nid)
-                    return
-                if node.get('type') == 'event':
-                    cur_run += 1
-                else:
-                    cur_run = 0
-                if cur_run > cap:
-                    # convert this node to monster if allowed
-                    if node.get('type') not in ('start', 'boss', 'rest', 'treasure'):
-                        node['type'] = 'monster'
-                        changed = True
-                        visited.remove(nid)
-                        return
-                if node.get('type') == 'boss':
-                    visited.remove(nid)
-                    return
-                for c in children.get(nid, []):
-                    dfs(c, cur_run, visited)
-                visited.remove(nid)
-
-            for s in graph[0]:
-                dfs(s['id'], 0, set())
-
-            if changed:
-                # rebuild maps to reflect modifications
-                id_to_node = {n['id']: n for lvl in graph for n in lvl}
-                children = {nid: [] for nid in id_to_node}
-                for lvl_nodes in graph:
-                    for n in lvl_nodes:
-                        for p in n.get('parents', []):
-                            if p in children:
-                                children[p].append(n['id'])
-
-    enforce_max_consecutive_events(graph, cap=3)
-
-    # enforce adjacency constraint: parents should be at same column or one left/right
-    def enforce_adjacent_parent_positions():
-        # For each level >0, map node positions and clamp parents to allowed offsets
-        for lvl_idx in range(1, len(graph)):
-            prev = graph[lvl_idx - 1]
-            cur = graph[lvl_idx]
-            if not prev or not cur:
-                continue
-            prev_pos = {n['id']: i for i, n in enumerate(prev)}
-            # for each child, keep parents whose position is within [-1,0,1] of child's index
-            for ci, child in enumerate(cur):
-                pars = child.get('parents', [])
-                allowed = []
-                for p in pars:
-                    ppos = prev_pos.get(p)
-                    if ppos is None:
-                        continue
-                    if abs(ppos - ci) <= 1:
-                        allowed.append(p)
-                if allowed:
-                    # preserve relative order but limited to allowed set
-                    child['parents'] = [p for p in pars if p in allowed]
-                else:
-                    # no allowed parents — attach to nearest prev by position
-                    # prefer left, then same, then right if equidistant
-                    best = min(prev, key=lambda n: abs(prev_pos[n['id']] - ci))
-                    child['parents'] = [best['id']]
-
-    # final validation and fixes to avoid disconnected/isolated nodes
-    validate_and_fix_graph(graph)
-
-    # re-apply adjacency constraint after final validation to ensure any reattachments
-    # also respect direct-down / down-left / down-right rule
-    def enforce_adjacent_parent_positions_post():
-        for lvl_idx in range(1, len(graph)):
-            # skip boss level: boss should preserve all parents from previous level
-            if lvl_idx == len(graph) - 1:
-                continue
-            prev = graph[lvl_idx - 1]
-            cur = graph[lvl_idx]
-            if not prev or not cur:
-                continue
-            prev_pos = {n['id']: i for i, n in enumerate(prev)}
-            prev_len = len(prev)
-            cur_len = len(cur)
-            for ci, child in enumerate(cur):
-                # map child's fractional position into prev index space
-                if cur_len > 1:
-                    frac = ci / (cur_len - 1)
-                else:
-                    frac = 0.0
-                target_idx = round(frac * (prev_len - 1))
-                allowed_indices = {max(0, target_idx - 1), target_idx, min(prev_len - 1, target_idx + 1)}
-                pars = child.get('parents', [])
-                allowed = [p for p in pars if prev_pos.get(p) in allowed_indices]
-                if allowed:
-                    # preserve order among allowed
-                    child['parents'] = [p for p in pars if p in allowed]
-                else:
-                    # attach nearest prev by fractional distance
-                    best = min(prev, key=lambda n: abs((prev_pos[n['id']] / max(1, prev_len - 1)) - frac))
-                    child['parents'] = [best['id']]
-
-    enforce_adjacent_parent_positions_post()
-
     return graph
-
-
-def minimize_crossings(graph: List[List[Dict]], passes: int = 6):
-    """Iterative barycenter/median ordering (top-down and bottom-up) to reduce crossings.
-    This reorders nodes in-place in `graph`.
-    """
-    if not graph:
-        return graph
-    L = len(graph)
-    BIG = 1_000_000
-
-    def barycenter_for_children(row, next_row):
-        idx = {n['id']: i for i, n in enumerate(row)}
-        def key(n):
-            parents = n.get('parents', [])
-            vals = [idx.get(p, BIG) for p in parents]
-            if not vals:
-                return (BIG, BIG)
-            return (sum(vals) / len(vals), min(vals))
-        next_row.sort(key=key)
-
-    def barycenter_for_parents(row, next_row):
-        child_idx = {n['id']: i for i, n in enumerate(next_row)}
-        def key(n):
-            refs = []
-            for i, cn in enumerate(next_row):
-                if n['id'] in cn.get('parents', []):
-                    refs.append(i)
-            if not refs:
-                return (BIG, BIG)
-            refs.sort()
-            mid = refs[len(refs) // 2]
-            return (mid, min(refs))
-        row.sort(key=key)
-
-    for _ in range(passes):
-        # top-down pass
-        for lvl in range(0, L - 1):
-            barycenter_for_children(graph[lvl], graph[lvl + 1])
-        # bottom-up pass
-        for lvl in range(L - 1, 0, -1):
-            barycenter_for_parents(graph[lvl - 1], graph[lvl])
-    return graph
-
-
-def remove_vertical_empty_stacks(graph: List[List[Dict]], max_iters: int = 100):
-    """Attempt to avoid multiple 'empty' nodes aligned in the same column index by local swaps.
-    This reorders nodes within levels (display order) to break vertical stacks where possible.
-    """
-    if not graph:
-        return graph
-    it = 0
-    while it < max_iters:
-        it += 1
-        # build column map: col_idx -> list of (lvl_idx)
-        col_map = {}
-        changed = False
-        for lvl_idx, lvl in enumerate(graph):
-            for col_idx, n in enumerate(lvl):
-                if n.get('type') == 'empty':
-                    col_map.setdefault(col_idx, []).append(lvl_idx)
-        # find any column with >1 empties
-        conflict_cols = [c for c, lvls in col_map.items() if len(lvls) > 1]
-        if not conflict_cols:
-            break
-        for c in conflict_cols:
-            lvls = col_map[c]
-            # resolve conflicts by swapping node within its level with neighbor where possible
-            for lvl_idx in lvls[1:]:
-                lvl = graph[lvl_idx]
-                col_idx = c
-                swapped = False
-                # prefer swapping toward center (try left then right)
-                for ni in (col_idx - 1, col_idx + 1):
-                    if 0 <= ni < len(lvl):
-                        lvl[col_idx], lvl[ni] = lvl[ni], lvl[col_idx]
-                        changed = True
-                        swapped = True
-                        break
-                if not swapped:
-                    continue
-        if not changed:
-            break
-    return graph
-
-
-def ensure_parents_have_children(graph: List[List[Dict]]):
-    """Ensure every parent node (except in the boss level) has at least one child.
-    If a parent has no children in the next level, try to attach it to an existing child
-    (prefer child with few parents), otherwise create a new child node in the next level.
-    """
-    if not graph:
-        return graph
-    L = len(graph)
-    nid_max = max(n['id'] for lvl in graph for n in lvl) + 1
-    for lvl in range(0, L - 1):
-        next_row = graph[lvl + 1]
-        for p in list(graph[lvl]):
-            children = [n for n in next_row if p['id'] in n.get('parents', [])]
-            if children:
-                continue
-            # find candidate child to adopt this parent
-            best = None
-            best_score = 999
-            for idx, c in enumerate(next_row):
-                par_count = len(c.get('parents', []))
-                # prefer child with <2 parents
-                score = par_count
-                if par_count < 2 and score < best_score:
-                    best = c
-                    best_score = score
-            if best is not None:
-                # attach parent id to this child
-                best['parents'] = list(dict.fromkeys(best.get('parents', []) + [p['id']]))
-            else:
-                # create new child node anchored to this parent
-                new_node = {'id': nid_max, 'level': lvl + 1, 'parents': [p['id']], 'type': 'monster'}
-                nid_max += 1
-                # insert near middle of next_row
-                insert_at = max(0, len(next_row) // 2)
-                next_row.insert(insert_at, new_node)
-    return graph
-
-
-def validate_and_fix_graph(graph: List[List[Dict]]):
-    """Post-generation validation: fix dangling parents, isolated nodes, and ensure connectivity.
-    Modifies graph in-place.
-    """
-    if not graph:
-        return graph
-    L = len(graph)
-
-    # helper maps
-    id_to_level_index = {}
-    for lvl_idx, lvl in enumerate(graph):
-        for idx, n in enumerate(lvl):
-            id_to_level_index[n['id']] = (lvl_idx, idx)
-
-    # fix children' parents that reference ids not in previous level
-    for lvl in range(1, L):
-        prev_ids = [n['id'] for n in graph[lvl - 1]]
-        prev_pos = {n['id']: i for i, n in enumerate(graph[lvl - 1])}
-        for node in graph[lvl]:
-            parents = node.get('parents', [])
-            # keep only parents that exist in prev_ids
-            valid = [p for p in parents if p in prev_ids]
-            if valid:
-                node['parents'] = valid
-                continue
-            # no valid parents: pick closest prev node by index similarity if possible
-            # fallback: choose the prev node with fewest children
-            best = None
-            best_child_count = 1_000_000
-            for p in graph[lvl - 1]:
-                child_count = sum(1 for c in graph[lvl] if p['id'] in c.get('parents', []))
-                if child_count < best_child_count:
-                    best_child_count = child_count
-                    best = p
-            if best is not None:
-                node['parents'] = [best['id']]
-
-    # ensure every parent has at least one child (may add child)
-    ensure_parents_have_children(graph)
-
-    # ensure no node (except start/boss) is isolated (no parents and no children)
-    id_to_node = {n['id']: n for lvl in graph for n in lvl}
-    children = {nid: [] for nid in id_to_node}
-    for lvl_nodes in graph:
-        for n in lvl_nodes:
-            for p in n.get('parents', []):
-                if p in children:
-                    children[p].append(n['id'])
-
-    for lvl_idx in range(1, L - 1):
-        for n in graph[lvl_idx]:
-            par = n.get('parents', [])
-            ch = children.get(n['id'], [])
-            if not par and not ch:
-                # attach to a nearby parent in prev level
-                prev_lvl = graph[lvl_idx - 1]
-                if prev_lvl:
-                    # pick prev node with fewest children
-                    best = min(prev_lvl, key=lambda p: len(children.get(p['id'], [])))
-                    n['parents'] = [best['id']]
-                    children[best['id']].append(n['id'])
-
-    return graph
-
 
 
 def balance_choices(graph: List[List[Dict]], params: Dict | None = None, threshold: float = 2.0) -> List[List[Dict]]:
