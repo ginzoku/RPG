@@ -50,8 +50,13 @@ def get_default_params() -> Dict:
 
 
 def generate(seed: int | None = None, params: Dict | None = None) -> List[List[Dict]]:
+    # Establish a reproducible internal seed for each invocation so problematic maps can be reproduced.
     if seed is not None:
-        random.seed(seed)
+        used_seed = int(seed)
+        random.seed(used_seed)
+    else:
+        used_seed = random.randrange(2 ** 32)
+        random.seed(used_seed)
 
     if params is None:
         params = get_default_params()
@@ -315,6 +320,92 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 row.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': 'normal'})
                 nid += 1
 
+            # --- detect simple crossing pattern between two adjacent parents and resolve ---
+            # For each adjacent parent pair (pl, pr) in previous row, if there exist children
+            # cl (to the right) connected to pl and cr (to the left) connected to pr such that
+            # their positions cross (index_cl > index_cr), remove one of the two edges with 50/50 chance.
+            # Safety: do not remove an edge if it would orphan the child (i.e., child has only that parent).
+            if len(prev) >= 2 and len(row) >= 2:
+                # build mapping from parent id to list of child indices
+                parent_to_children_idxs = {}
+                for idx, node in enumerate(row):
+                    for pid in node.get('parents', []):
+                        parent_to_children_idxs.setdefault(pid, []).append(idx)
+
+                for i_parent in range(len(prev) - 1):
+                    pl = prev[i_parent]['id']
+                    pr = prev[i_parent + 1]['id']
+                    left_idxs = parent_to_children_idxs.get(pl, [])
+                    right_idxs = parent_to_children_idxs.get(pr, [])
+                    if not left_idxs or not right_idxs:
+                        continue
+                    # examine all pairs for crossing
+                    for li in left_idxs:
+                        for ri in right_idxs:
+                            # crossing when left-parent's child is to the right of right-parent's child
+                            if li > ri:
+                                left_node = row[li]
+                                right_node = row[ri]
+                                # edges considered: (pl -> left_node) and (pr -> right_node)
+                                # decide randomly which to remove, but ensure we don't orphan
+                                choice = random.choice([0, 1])
+                                removed = False
+                                if choice == 0:
+                                    # try remove pr->right_node
+                                    if len(right_node.get('parents', [])) > 1:
+                                        right_node['parents'] = [p for p in right_node.get('parents', []) if p != pr]
+                                        removed = True
+                                    else:
+                                        # try the other edge if safe
+                                        if len(left_node.get('parents', [])) > 1:
+                                            left_node['parents'] = [p for p in left_node.get('parents', []) if p != pl]
+                                            removed = True
+                                else:
+                                    # try remove pl->left_node
+                                    if len(left_node.get('parents', [])) > 1:
+                                        left_node['parents'] = [p for p in left_node.get('parents', []) if p != pl]
+                                        removed = True
+                                    else:
+                                        if len(right_node.get('parents', [])) > 1:
+                                            right_node['parents'] = [p for p in right_node.get('parents', []) if p != pr]
+                                            removed = True
+                                # if removed, update parent_to_children_idxs to avoid double-handling
+                                if removed:
+                                    parent_to_children_idxs = {}
+                                    for idx2, node2 in enumerate(row):
+                                        for pid2 in node2.get('parents', []):
+                                            parent_to_children_idxs.setdefault(pid2, []).append(idx2)
+                                    # continue scanning this parent pair for other crossings
+                                # After attempting safe edge removals, perform a small swap-pass to fix remaining crossings
+                                # without changing topology. This avoids orphaning while correcting ordering.
+                                swap_iter = 0
+                                while True:
+                                    swapped = False
+                                    # rebuild mapping
+                                    parent_to_children_idxs = {}
+                                    for idx2, node2 in enumerate(row):
+                                        for pid2 in node2.get('parents', []):
+                                            parent_to_children_idxs.setdefault(pid2, []).append(idx2)
+                                    for i_parent2 in range(len(prev) - 1):
+                                        pl2 = prev[i_parent2]['id']
+                                        pr2 = prev[i_parent2 + 1]['id']
+                                        left_idxs2 = parent_to_children_idxs.get(pl2, [])
+                                        right_idxs2 = parent_to_children_idxs.get(pr2, [])
+                                        for li2 in list(left_idxs2):
+                                            for ri2 in list(right_idxs2):
+                                                if li2 > ri2:
+                                                    # swap the two nodes in this row to remove crossing
+                                                    row[li2], row[ri2] = row[ri2], row[li2]
+                                                    swapped = True
+                                                    break
+                                            if swapped:
+                                                break
+                                        if swapped:
+                                            break
+                                    swap_iter += 1
+                                    if not swapped or swap_iter >= 8:
+                                        break
+
         # If this row is immediately before a rest-full row,
         # ensure it is merged down to at most 3 nodes so that the rest row receives three inputs.
         if lvl in PRE_REST_ROWS:
@@ -486,6 +577,32 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                             nid += 1
                             row.append(new_node)
                             no_change_run = 0
+
+        # Coalesce any nodes that share an identical multi-parent set into a single merged node.
+        # This avoids duplicated children that create unavoidable X-connections.
+        parentset_to_indices = {}
+        for idx, node in enumerate(row):
+            pset = frozenset(node.get('parents', []))
+            parentset_to_indices.setdefault(pset, []).append(idx)
+        if any(len(idxs) > 1 and len(pset) > 1 for pset, idxs in parentset_to_indices.items()):
+            new_row = []
+            handled = set()
+            for idx, node in enumerate(row):
+                if idx in handled:
+                    continue
+                pset = frozenset(node.get('parents', []))
+                idxs = parentset_to_indices.get(pset, [])
+                if len(pset) > 1 and len(idxs) > 1:
+                    # create a single merged node placed at the first occurrence
+                    merged = {'id': nid, 'level': lvl, 'parents': list(pset), 'merged_from': True}
+                    nid += 1
+                    new_row.append(merged)
+                    for j in idxs:
+                        handled.add(j)
+                else:
+                    new_row.append(node)
+                    handled.add(idx)
+            row = new_row
 
         graph.append(row)
         # ensure at least 2 nodes for non-first, non-boss rows
@@ -762,6 +879,57 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
 
     enforce_monster_on_sparse_branches(graph, threshold=ENFORCE_MONSTER_THRESHOLD)
 
+    # Final topological coalesce pass:
+    # For each level, if multiple nodes share the exact same parent set, merge them into a single node
+    # and update children to point to the merged node. This preserves topology while removing
+    # duplicate multi-parent children that create unavoidable visual crossings.
+    for lvl_idx in range(1, len(graph) - 1):
+        lvl_nodes = graph[lvl_idx]
+        # group by parent-set
+        groups = {}
+        for n in lvl_nodes:
+            pset = frozenset(n.get('parents', []))
+            groups.setdefault(pset, []).append(n)
+        changed = False
+        for pset, nodes_group in list(groups.items()):
+            if len(nodes_group) <= 1 or len(pset) <= 1:
+                continue
+            # create merged node
+            merged_id = nid
+            merged_node = {'id': merged_id, 'level': lvl_idx, 'parents': list(pset), 'merged_from': True}
+            nid += 1
+            # replace nodes in level with merged_node (keep original order: place merged at first occurrence)
+            first_idx = min(lvl_nodes.index(n) for n in nodes_group)
+            new_lvl = []
+            for i, n in enumerate(lvl_nodes):
+                if n in nodes_group:
+                    if i == first_idx:
+                        new_lvl.append(merged_node)
+                    # skip other duplicates
+                else:
+                    new_lvl.append(n)
+            graph[lvl_idx] = new_lvl
+            # update children in next level to point to merged_id instead of any of the originals
+            next_lvl = graph[lvl_idx + 1]
+            orig_ids = set(n['id'] for n in nodes_group)
+            for child in next_lvl:
+                parents = child.get('parents', [])
+                new_parents = []
+                replaced = False
+                for pid in parents:
+                    if pid in orig_ids:
+                        if not replaced:
+                            new_parents.append(merged_id)
+                            replaced = True
+                        # else skip additional duplicates
+                    else:
+                        new_parents.append(pid)
+                child['parents'] = new_parents
+            changed = True
+        if changed:
+            # rebuild id map if needed (loop continues)
+            pass
+
     # Safety final clamp: ensure no row exceeds MAX_PER_ROW by pairwise merging as needed.
     # This is a protective post-process in case earlier steps expanded rows beyond the cap.
     # Use an iterative approach with a forced-merge fallback to guarantee progress
@@ -816,7 +984,41 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             if 'type' not in n or n['type'] is None:
                 n['type'] = 'monster'
 
+    # detect remaining crossings and log seed for repro if any
+    try:
+        if _detect_crossings(graph):
+            print(f"MAP_CROSSING_SEED={used_seed}")
+    except Exception:
+        # safe: never let logging break generation
+        pass
     return graph
+
+
+def _detect_crossings(graph: List[List[Dict]]) -> bool:
+    """Return True if any crossing pattern (left-parent->right-child crossing) exists in the graph."""
+    for lvl in range(1, len(graph)):
+        prev = graph[lvl - 1]
+        row = graph[lvl]
+        if not prev or not row:
+            continue
+        # build mapping parent id -> list of child indices
+        parent_children = {}
+        for idx, node in enumerate(row):
+            for pid in node.get('parents', []):
+                parent_children.setdefault(pid, []).append(idx)
+        # check adjacent parent pairs
+        for i in range(len(prev) - 1):
+            pl = prev[i]['id']
+            pr = prev[i + 1]['id']
+            left_idxs = parent_children.get(pl, [])
+            right_idxs = parent_children.get(pr, [])
+            if not left_idxs or not right_idxs:
+                continue
+            for li in left_idxs:
+                for ri in right_idxs:
+                    if li > ri:
+                        return True
+    return False
 
 
 def balance_choices(graph: List[List[Dict]], params: Dict | None = None, threshold: float = 2.0) -> List[List[Dict]]:
