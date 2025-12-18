@@ -211,6 +211,57 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                         new_node = {'id': nid, 'level': lvl, 'parents': list(src_node.get('parents', [])), 'type': src_node.get('type', 'monster')}
                         nid += 1
                         graph[-1].append(new_node)
+
+                # helper to count children of a node in the next level
+                def child_count_in_next_level(node_id, next_level_nodes):
+                    return sum(1 for c in next_level_nodes if node_id in c.get('parents', []))
+
+                # Prevent very long pure-linear runs (no branch/no-merge) of length LINEAR_RUN
+                LINEAR_RUN = 4
+                for start_lvl in range(1, max(1, LEVELS - LINEAR_RUN - 1)):
+                    end_lvl = start_lvl + LINEAR_RUN - 1
+                    target_lvl = end_lvl + 1
+                    if target_lvl >= LEVELS - 1:
+                        continue
+                    # skip runs that include fixed rest or treasure rows
+                    if any(l in REST_ROWS or l in TREASURE_ROWS for l in range(start_lvl, end_lvl + 1)):
+                        continue
+                    # check one-to-one for each adjacent pair in the run
+                    linear = True
+                    for l in range(start_lvl, end_lvl + 1):
+                        if l + 1 >= len(graph):
+                            linear = False
+                            break
+                        next_nodes = graph[l + 1]
+                        for n in graph[l]:
+                            if child_count_in_next_level(n['id'], next_nodes) != 1:
+                                linear = False
+                                break
+                        if not linear:
+                            break
+                        for c in next_nodes:
+                            if len(c.get('parents', [])) != 1:
+                                linear = False
+                                break
+                        if not linear:
+                            break
+                    if not linear:
+                        continue
+
+                    # break linearity: prefer branching (add child) if room, otherwise merge
+                    if len(graph[target_lvl]) < MAX_PER_ROW:
+                        import random as _rand
+                        parent_candidates = [n['id'] for n in graph[end_lvl]]
+                        if parent_candidates:
+                            pid = _rand.choice(parent_candidates)
+                            new_node = {'id': nid, 'level': target_lvl, 'parents': [pid], 'type': 'normal'}
+                            nid += 1
+                            graph[target_lvl].append(new_node)
+                    else:
+                        # try a single merge on the target level
+                        need = 1
+                        new_row, nid = pairwise_merge_k(graph[target_lvl], need, nid)
+                        graph[target_lvl] = new_row
                 continue
             else:
                 # start by making one node per previous parent, then merge down to 3
