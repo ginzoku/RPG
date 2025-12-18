@@ -435,6 +435,32 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 nid += 1
                 graph[-1].append(new_node)
 
+    # Post-process: prevent crossing connections.
+    # For each level, sort the next level's nodes by the leftmost index of their parents
+    # so that edges do not cross (i.e., children are ordered by parent position).
+    for lvl in range(0, LEVELS - 1):
+        # (apply ordering even next to special rows) - sort children by parent positions
+        row = graph[lvl]
+        next_row = graph[lvl + 1]
+        # build parent index map for current row
+        idx_map = {n['id']: i for i, n in enumerate(row)}
+        # compute key for each node in next_row as min index of its parents (fallback large)
+        def parent_key(node):
+            ps = node.get('parents', [])
+            keys = sorted(idx_map.get(p, 1_000_000) for p in ps)
+            if not keys:
+                return (1_000_000, 1_000_000, 1_000_000)
+            # prioritize min parent index, then median, then max as tiebreakers
+            mn = keys[0]
+            md = keys[len(keys) // 2]
+            mx = keys[-1]
+            return (mn, md, mx)
+        # stable sort next_row by parent_key to ensure monotonic parent positions
+        sorted_next = sorted(next_row, key=parent_key)
+        # if ordering changed, apply
+        if sorted_next != next_row:
+            graph[lvl + 1] = sorted_next
+
     # Assign types according to MAP_LOGIC probabilities with constraints.
     # Base probabilities (per-node): monster 30%, elite 15%, event 32%, shop 8%, rest 15%
     levels_map = build_levels_map(graph)
