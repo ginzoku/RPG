@@ -27,7 +27,7 @@ def get_default_params() -> Dict:
         'treasure_rows': [9],
         # placement caps (excluding fixed/guaranteed placements)
         'REST_CAP': 5,
-        'ELITE_EXTRA_CAP': 2,
+        'ELITE_EXTRA_CAP': 1,
         'SHOP_EXTRA_CAP': 3,
         # branch/boost tuning
         'ENFORCE_MONSTER_THRESHOLD': 3,
@@ -985,6 +985,30 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 n['type'] = 'monster'
 
     # detect remaining crossings and log seed for repro if any
+    # Post-process: place up to 2 "濃い灰色" nodes in lower levels and up to 2 in upper levels.
+    # These overwrite existing node 'type' values but keep topology.
+    try:
+        LEVELS_ACTUAL = len(graph)
+        lower_cut = max(1, LEVELS_ACTUAL // 2)
+        # exclude fixed/special nodes so we don't overwrite rest/treasure/start/boss
+        def is_eligible_for_dark(n):
+            return n.get('type') not in ('rest', 'treasure', 'boss', 'start')
+
+        lower_candidates = [n for lvl_idx, lvl in enumerate(graph) for n in lvl if 0 < lvl_idx < lower_cut and is_eligible_for_dark(n)]
+        upper_candidates = [n for lvl_idx, lvl in enumerate(graph) for n in lvl if lower_cut <= lvl_idx < LEVELS_ACTUAL - 1 and is_eligible_for_dark(n)]
+        # pick up to 2 from each (seeded randomness via random)
+        import math
+        if lower_candidates:
+            k = min(2, len(lower_candidates))
+            for n in random.sample(lower_candidates, k):
+                n['type'] = 'dark'
+        if upper_candidates:
+            k2 = min(2, len(upper_candidates))
+            for n in random.sample(upper_candidates, k2):
+                n['type'] = 'dark'
+    except Exception:
+        pass
+
     try:
         if _detect_crossings(graph):
             print(f"MAP_CROSSING_SEED={used_seed}")

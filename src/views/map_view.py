@@ -180,6 +180,8 @@ class MapView:
                             color = (255, 165, 0)
                         elif t == 'treasure':
                             color = (200, 160, 80)
+                        elif t == 'dark':
+                            color = (60, 60, 60)
                         elif t == 'boss':
                             color = (200, 60, 60)
                         elif t == 'event':
