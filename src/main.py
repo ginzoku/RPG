@@ -31,6 +31,7 @@ class GameController:
         self.battle_scene = BattleScene(self.player) # プレイヤーオブジェクトを渡す
         self.battle_view = BattleView() # 修正: 重複していた行を削除
         self.running = True
+        self._saved_map_screenshot = False
         # フラグ: 会話終了直後に同じ入力で再度会話が始まらないよう一度だけインタラクションを無視する
         self._skip_next_map_interaction = False
 
@@ -136,6 +137,14 @@ class GameController:
                 else:
                     self.map_scene.update()
                     self.map_view.draw(self.map_scene)
+                    # save one screenshot for debugging reproducible map
+                    try:
+                        if not getattr(self, '_saved_map_screenshot', False):
+                            pygame.image.save(self.screen, 'tools/map_screenshot.png')
+                            print('Saved map screenshot to tools/map_screenshot.png', flush=True)
+                            self._saved_map_screenshot = True
+                    except Exception:
+                        pass
                     if self.map_scene.collided_enemy:
                         self.game_state = "battle"
                         self.battle_scene.reset(self.map_scene.collided_enemy.enemy_group_id)

@@ -84,7 +84,7 @@ class MapView:
                 level_spacing = 80  # 1行あたりの縦間隔（px） （半分に短縮）
                 node_size = 32
                 # increase horizontal padding between nodes to avoid line/node overlap
-                h_padding = 40
+                h_padding = 80
                 for lvl_idx, nodes in enumerate(graph):
                     y = int(level_margin + lvl_idx * level_spacing)
                     # apply vertical scroll offset
@@ -148,6 +148,9 @@ class MapView:
                             # guard: if parent id not present in id_to_node, skip
                             if src_id not in id_to_node:
                                 continue
+                            # target x for heuristic selection (child's x)
+                            target_pos = node_positions.get(node['id'])
+                            target_x = target_pos[0] if target_pos is not None else None
                             # walk upward until a non-empty node or no parents
                             visited = set()
                             while True:
@@ -163,7 +166,16 @@ class MapView:
                                 parents_up = pn.get('parents', [])
                                 if not parents_up:
                                     break
-                                src_id = parents_up[0]
+                                # If multiple candidate parents exist, prefer the one horizontally
+                                # closest to the child to avoid long diagonal jumps.
+                                next_src = None
+                                if target_x is not None:
+                                    candidates = [pid for pid in parents_up if pid in node_positions]
+                                    if candidates:
+                                        next_src = min(candidates, key=lambda pid: abs(node_positions[pid][0] - target_x))
+                                if next_src is None:
+                                    next_src = parents_up[0]
+                                src_id = next_src
                             if src_id not in node_positions or node['id'] not in node_positions:
                                 continue
                             x1, y1 = node_positions[src_id]
@@ -181,7 +193,7 @@ class MapView:
                                 sy = y1 + dy * (r / dist)
                                 ex = x2 - dx * (r / dist)
                                 ey = y2 - dy * (r / dist)
-                                pygame.draw.line(overlay, (140, 140, 140), (int(sx), int(sy)), (int(ex), int(ey)), 3)
+                                pygame.draw.line(overlay, (140, 140, 140), (int(sx), int(sy)), (int(ex), int(ey)), 5)
                             else:
                                 pygame.draw.line(overlay, (140, 140, 140), (x1, y1), (x2, y2), 3)
 
@@ -209,7 +221,7 @@ class MapView:
                                         sy = y1 + dy * (r / dist)
                                         ex = x2 - dx * (r / dist)
                                         ey = y2 - dy * (r / dist)
-                                        pygame.draw.line(overlay, (120, 120, 120), (int(sx), int(sy)), (int(ex), int(ey)), 2)
+                                        pygame.draw.line(overlay, (120, 120, 120), (int(sx), int(sy)), (int(ex), int(ey)), 4)
                                     else:
                                         pygame.draw.line(overlay, (120, 120, 120), (x1, y1), (x2, y2), 2)
 
@@ -273,7 +285,7 @@ class MapView:
 
                 # draw connecting vertical lines between centers (shorten by node radius)
                 line_color = (140, 140, 140)
-                line_width = 3
+                line_width = 5
                 centers = []
                 for i in range(count):
                     y = level_margin + i * level_spacing - cur_scroll

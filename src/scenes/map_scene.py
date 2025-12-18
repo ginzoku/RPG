@@ -55,7 +55,11 @@ class MapScene:
         self.overlay_scroll_target = 0
         # generate node-based map according to rules for drawing
         try:
-            self.map_graph = generate_map()
+            # use and log a reproducible seed for debugging
+            import random as _rnd
+            seed = _rnd.randrange(2**32)
+            print(f"MAP_SEED={seed}", flush=True)
+            self.map_graph = generate_map(seed=seed)
         except Exception:
             self.map_graph = None
 
