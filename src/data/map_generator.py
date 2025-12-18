@@ -44,8 +44,6 @@ def get_default_params() -> Dict:
         # guaranteed counts
         'GUARANTEED_ELITES': 3,
         'GUARANTEED_SHOPS': 3,
-        # skip-node probability: mark node as 'empty' but keep it in topology
-        'SKIP_NODE_PROB': 0.25,
         # minimum required non-empty steps on any start->boss path; if None, defaults to LEVELS-2
         'MIN_REQUIRED_STEPS': None,
     }
@@ -189,6 +187,17 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         return new_list, next_id
 
     # build subsequent levels
+    # auxiliary vars for "3連続変化無しで強制分岐/結合"ルール
+    no_change_run = 0
+    pending_action_level = None
+    PRE_TREASURE_ROWS = [r - 1 for r in TREASURE_ROWS]
+    boss_pre_rest = max(REST_ROWS) if REST_ROWS else None
+    excluded_levels_for_forcing = set()
+    if boss_pre_rest is not None:
+        excluded_levels_for_forcing.add(boss_pre_rest)
+        if boss_pre_rest - 1 >= 0:
+            excluded_levels_for_forcing.add(boss_pre_rest - 1)
+
     for lvl in range(1, LEVELS):
         prev = graph[lvl - 1]
         prev_count = len(prev)
@@ -374,6 +383,109 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         if len(row) > MAX_PER_ROW:
             need = len(row) - MAX_PER_ROW
             row, nid = pairwise_merge_k(row, need, nid)
+
+        # detect branching (a parent producing multiple children) for this level
+        parent_child_counts = {}
+        for node in row:
+            for pid in node.get('parents', []):
+                parent_child_counts[pid] = parent_child_counts.get(pid, 0) + 1
+        branch_occurred = any(cnt > 1 for cnt in parent_child_counts.values())
+
+        # detect merges if any node carries 'merged_from'
+        merges_performed = any(n.get('merged_from') for n in row)
+
+        # If an action was scheduled to be performed on this level (redirect from PRE_REST/PRE_TREASURE), do it now
+        if pending_action_level == lvl:
+            if lvl not in excluded_levels_for_forcing:
+                if len(row) >= 2:
+                    a = row[0]
+                    b = row[1]
+                    merged_parents = list(set(a.get('parents', []) + b.get('parents', [])))
+                    merged = {'id': nid, 'level': lvl, 'parents': merged_parents, 'merged_from': True}
+                    nid += 1
+                    row = [merged] + row[2:]
+                    merges_performed = True
+                else:
+                    # attempt branching: add a child for parent with fewest children
+                    if lvl - 1 >= 0 and graph[lvl - 1]:
+                        prev_parents = graph[lvl - 1]
+                        counts = {p['id']: 0 for p in prev_parents}
+                        for node in row:
+                            for pid in node.get('parents', []):
+                                if pid in counts:
+                                    counts[pid] += 1
+                        pick_pid = min(counts.keys(), key=lambda k: counts[k])
+                        new_node = {'id': nid, 'level': lvl, 'parents': [pick_pid], 'type': 'normal'}
+                        nid += 1
+                        row.append(new_node)
+                        branch_occurred = True
+            pending_action_level = None
+
+        # determine whether this level saw any change
+        changed = branch_occurred or merges_performed
+
+        # update no-change run counter
+        if not changed:
+            no_change_run += 1
+        else:
+            no_change_run = 0
+
+        # if 3 consecutive no-change levels seen, schedule/perform forced change
+        if no_change_run >= 3:
+            target = lvl
+            # if target is immediately before fixed rest/treasure, redirect to that fixed row
+            if target in PRE_REST_ROWS or target in PRE_TREASURE_ROWS:
+                redirect = target + 1
+                if redirect < LEVELS and redirect not in excluded_levels_for_forcing:
+                    pending_action_level = redirect
+                    no_change_run = 0
+                else:
+                    # fallback: try to act on current level
+                    if target not in excluded_levels_for_forcing:
+                        if len(row) >= 2:
+                            a = row[0]
+                            b = row[1]
+                            merged_parents = list(set(a.get('parents', []) + b.get('parents', [])))
+                            merged = {'id': nid, 'level': target, 'parents': merged_parents, 'merged_from': True}
+                            nid += 1
+                            row = [merged] + row[2:]
+                            no_change_run = 0
+                        else:
+                            if target - 1 >= 0 and graph[target - 1]:
+                                prev_parents = graph[target - 1]
+                                counts = {p['id']: 0 for p in prev_parents}
+                                for node in row:
+                                    for pid in node.get('parents', []):
+                                        if pid in counts:
+                                            counts[pid] += 1
+                                pick_pid = min(counts.keys(), key=lambda k: counts[k])
+                                new_node = {'id': nid, 'level': target, 'parents': [pick_pid], 'type': 'normal'}
+                                nid += 1
+                                row.append(new_node)
+                                no_change_run = 0
+            else:
+                if target not in excluded_levels_for_forcing:
+                    if len(row) >= 2:
+                        a = row[0]
+                        b = row[1]
+                        merged_parents = list(set(a.get('parents', []) + b.get('parents', [])))
+                        merged = {'id': nid, 'level': target, 'parents': merged_parents, 'merged_from': True}
+                        nid += 1
+                        row = [merged] + row[2:]
+                        no_change_run = 0
+                    else:
+                        if target - 1 >= 0 and graph[target - 1]:
+                            prev_parents = graph[target - 1]
+                            counts = {p['id']: 0 for p in prev_parents}
+                            for node in row:
+                                for pid in node.get('parents', []):
+                                    if pid in counts:
+                                        counts[pid] += 1
+                            pick_pid = min(counts.keys(), key=lambda k: counts[k])
+                            new_node = {'id': nid, 'level': target, 'parents': [pick_pid], 'type': 'normal'}
+                            nid += 1
+                            row.append(new_node)
+                            no_change_run = 0
 
         graph.append(row)
         # ensure at least 2 nodes for non-first, non-boss rows
@@ -695,151 +807,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             lvl_nodes = lvl_nodes[:-2] + [merged]
         graph[lvl_idx] = lvl_nodes
 
-    # Optional skip-node rule: mark nodes as 'empty' (skip) but keep them in the graph topology.
-    # - Skip doesn't apply to fixed treasure/rest/start/boss nodes
-    # - Ensure at least params['LEVELS'] - 2 non-empty nodes on any start->boss path
-    SKIP_PROB = params.get('SKIP_NODE_PROB', 0.06)
-    min_required = params.get('MIN_REQUIRED_STEPS', None)
-    if min_required is None:
-        # use LEVELS-3 as requested
-        min_required = max(0, params.get('LEVELS', LEVELS) - 3)
-
-    skipped_nodes = []
-    # determine first rest level (if any)
-    first_rest_level = min(REST_ROWS) if REST_ROWS else LEVELS
-    # build id->node map for ancestor checks
-    id_to_node_pre = {n['id']: n for lvl in graph for n in lvl}
-    for lvl in range(1, LEVELS - 1):
-        for node in list(graph[lvl]):
-            if node.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
-                continue
-            parents = node.get('parents', [])
-            # For nodes before the first rest row, allow at most one skip per branch:
-            # if any ancestor (not just immediate parent) in the same branch is already 'empty', disallow skipping.
-            parent_empty = False
-            if node.get('level', 0) < first_rest_level:
-                anc_ids = build_ancestors(node, levels_map)
-                for aid in anc_ids:
-                    an = id_to_node_pre.get(aid)
-                    if an is not None and an.get('type') == 'empty':
-                        parent_empty = True
-                        break
-            else:
-                # preserve previous behavior for deeper rows: check only immediate parents
-                for pid in parents:
-                    pnode = id_to_node_pre.get(pid)
-                    if pnode is not None and pnode.get('type') == 'empty':
-                        parent_empty = True
-                        break
-            if parent_empty:
-                continue
-            if random.random() < SKIP_PROB:
-                node['_orig_type'] = node.get('type')
-                node['type'] = 'empty'
-                skipped_nodes.append({'id': node['id'], 'orig_type': node['_orig_type']})
-
-    # If any skips happened, ensure minimal non-empty nodes along any start->boss path
-    if skipped_nodes:
-        id_to_node = {n['id']: n for lvl in graph for n in lvl}
-        children = {nid: [] for nid in id_to_node}
-        for lvl_nodes in graph:
-            for n in lvl_nodes:
-                for p in n.get('parents', []):
-                    if p in children:
-                        children[p].append(n['id'])
-
-        import heapq
-
-        def min_nonempty_cost(start_id, target_ids):
-            pq = [(0, start_id)]
-            best = {start_id: 0}
-            while pq:
-                cost, nid = heapq.heappop(pq)
-                if nid in target_ids:
-                    return cost
-                if cost != best.get(nid, 1e9):
-                    continue
-                for c in children.get(nid, []):
-                    node_c = id_to_node.get(c)
-                    if node_c is None:
-                        continue
-                    add = 0 if node_c.get('type') == 'empty' else 1
-                    newc = cost + add
-                    if newc < best.get(c, 1e9):
-                        best[c] = newc
-                        heapq.heappush(pq, (newc, c))
-            return None
-
-        start_ids = [n['id'] for n in graph[0]]
-        boss_ids = [n['id'] for lvl in graph for n in lvl if n.get('type') == 'boss']
-
-        def compute_min_cost():
-            min_cost = None
-            for s in start_ids:
-                c = min_nonempty_cost(s, set(boss_ids))
-                if c is None:
-                    continue
-                if min_cost is None or c < min_cost:
-                    min_cost = c
-            return 0 if min_cost is None else min_cost
-
-        cur_cost = compute_min_cost()
-        idx = len(skipped_nodes) - 1
-        while cur_cost < min_required and idx >= 0:
-            rec = skipped_nodes[idx]
-            nid = rec['id']
-            node = id_to_node.get(nid)
-            if node is None or node.get('type') != 'empty':
-                idx -= 1
-                continue
-            # restore node
-            node['type'] = node.get('_orig_type', rec.get('orig_type', 'monster'))
-            if '_orig_type' in node:
-                del node['_orig_type']
-            cur_cost = compute_min_cost()
-            idx -= 1
-
-        # Ensure at least 2 skips remain in the final graph (best-effort without violating min_required)
-        current_skips = sum(1 for lvl in graph for n in lvl if n.get('type') == 'empty')
-        if current_skips < 2:
-            # candidates: nodes that are not special/locked and currently non-empty
-            candidates = []
-            for lvl_idx in range(1, LEVELS - 1):
-                for n in graph[lvl_idx]:
-                    if n.get('type') in ('start', 'boss', 'rest', 'treasure', 'empty'):
-                        continue
-                    if 'locked_ids' in locals() and n['id'] in locked_ids:
-                        continue
-                    # avoid creating consecutive skips: skip if any parent is empty
-                    parent_empty = False
-                    for pid in n.get('parents', []):
-                        pn = None
-                        for lvl_nodes in graph:
-                            for nn in lvl_nodes:
-                                if nn['id'] == pid:
-                                    pn = nn
-                                    break
-                            if pn is not None:
-                                break
-                        if pn is not None and pn.get('type') == 'empty':
-                            parent_empty = True
-                            break
-                    if parent_empty:
-                        continue
-                    candidates.append(n)
-            random.shuffle(candidates)
-            for cand in candidates:
-                if current_skips >= 2:
-                    break
-                orig = cand.get('type')
-                cand['type'] = 'empty'
-                new_cost = compute_min_cost()
-                if new_cost < min_required:
-                    # revert
-                    cand['type'] = orig
-                    continue
-                current_skips += 1
-            # end candidates loop
+    # Skips disabled: map generator no longer marks any node as 'empty'/'skip'.
+    # (Previous skip-placement and safety-cleanup logic was removed.)
 
     # Final pass: convert any remaining unknowns to monster
     for lvl in range(1, LEVELS - 1):
