@@ -21,14 +21,23 @@ def get_default_params() -> Dict:
         # per-node type probabilities (used for lvl >= 5 rows)
         'type_probs': {'monster': 37, 'elite': 10, 'event': 30, 'shop': 8, 'rest': 15},
         # early rows (lvl < 4) allowed distribution
-        'early_probs': {'monster': 55, 'event': 40, 'shop': 5},
+        'early_probs': {'monster': 50, 'event': 40, 'shop': 10},
         # fixed special rows (0-based indices)
         'rest_rows': [5, 16],
         'treasure_rows': [6],
         # placement caps (excluding fixed/guaranteed placements)
-        'REST_CAP': 4,
+        'REST_CAP': 6,
         'ELITE_EXTRA_CAP': 3,
         'SHOP_EXTRA_CAP': 3,
+        # branch/boost tuning
+        'ENFORCE_MONSTER_THRESHOLD': 3,
+        'BRANCH_MONSTER_THRESHOLD': 3,
+        'REST_BOOST_MON_RUN': 0.25,
+        'REST_BOOST_AFTER_ELITE': 0.15,
+        'REST_BOOST_NO_REST_LEVEL': 8,
+        'REST_BOOST_NO_REST_AMOUNT': 0.20,
+        # penalty/discount multipliers
+        'REST_PENALTY_AFTER_TREASURE': 0.5,
         # guaranteed counts
         'GUARANTEED_ELITES': 3,
         'GUARANTEED_SHOPS': 3,
@@ -54,6 +63,15 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
     SHOP_EXTRA_CAP = params['SHOP_EXTRA_CAP']
 
     PRE_REST_ROWS = [r - 1 for r in REST_ROWS]
+
+    # tuning params
+    ENFORCE_MONSTER_THRESHOLD = params.get('ENFORCE_MONSTER_THRESHOLD', 3)
+    BRANCH_MONSTER_THRESHOLD = params.get('BRANCH_MONSTER_THRESHOLD', 3)
+    REST_BOOST_MON_RUN = params.get('REST_BOOST_MON_RUN', 0.25)
+    REST_BOOST_AFTER_ELITE = params.get('REST_BOOST_AFTER_ELITE', 0.15)
+    REST_BOOST_NO_REST_LEVEL = params.get('REST_BOOST_NO_REST_LEVEL', 8)
+    REST_BOOST_NO_REST_AMOUNT = params.get('REST_BOOST_NO_REST_AMOUNT', 0.20)
+    REST_PENALTY_AFTER_TREASURE = params.get('REST_PENALTY_AFTER_TREASURE', 0.5)
 
     nid = 0
     graph: List[List[Dict]] = []
@@ -380,15 +398,88 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             else:
                 allowed = list(allowed_items)
 
-            # sample with simple weight, but enforce non-consecutive for elite/rest
+            # sample with weights from allowed, but apply small contextual boosts
             choices = [t for t, w in allowed]
-            weights = [w for t, w in allowed]
-            # normalized random choice
-            pick = random.choices(choices, weights=weights, k=1)[0]
-            # if picked elite/rest but parent already same type, fallback to monster
-            if pick in ('elite', 'rest') and not can_be_nonconsecutive(n, pick):
-                pick = 'monster'
-            n['type'] = pick
+            weights = {t: float(w) for t, w in allowed}
+
+            # helper: get node by id
+            def get_node_by_id(nid):
+                for lvl_nodes in graph:
+                    for nn in lvl_nodes:
+                        if nn['id'] == nid:
+                            return nn
+                return None
+
+            # compute consecutive monsters along a single-parent chain (take max over parents)
+            def consecutive_monsters_from_parent(pid):
+                length = 0
+                cur = get_node_by_id(pid)
+                while cur is not None and cur.get('type') == 'monster':
+                    length += 1
+                    parents = cur.get('parents', [])
+                    if not parents:
+                        break
+                    cur = get_node_by_id(parents[0])
+                return length
+
+            # boost rest likelihood if this node follows long monster runs or an elite parent
+            if 'rest' in weights:
+                # check each parent chain for long monster runs
+                max_mon_run = 0
+                for pid in n.get('parents', []):
+                    run = consecutive_monsters_from_parent(pid)
+                    if run > max_mon_run:
+                        max_mon_run = run
+                rest_boost = 1.0
+                if max_mon_run >= BRANCH_MONSTER_THRESHOLD:
+                    rest_boost += REST_BOOST_MON_RUN
+                # small boost if any immediate parent is elite
+                if any(get_node_by_id(pid) is not None and get_node_by_id(pid).get('type') == 'elite' for pid in n.get('parents', [])):
+                    rest_boost += REST_BOOST_AFTER_ELITE
+
+                # boost when this branch has never seen a rest and we're at/after configured level
+                def branch_has_rest(pid):
+                    cur = get_node_by_id(pid)
+                    visited = set()
+                    while cur is not None and cur['id'] not in visited:
+                        visited.add(cur['id'])
+                        if cur.get('type') == 'rest':
+                            return True
+                        parents = cur.get('parents', [])
+                        if not parents:
+                            break
+                        cur = get_node_by_id(parents[0])
+                    return False
+
+                any_parent_has_rest = any(branch_has_rest(pid) for pid in n.get('parents', [])) if n.get('parents') else False
+                if not any_parent_has_rest and lvl >= REST_BOOST_NO_REST_LEVEL:
+                    rest_boost += REST_BOOST_NO_REST_AMOUNT  # small extra boost for long-no-rest branches
+                # small penalty if any immediate parent is a treasure (make rest less likely)
+                if any(get_node_by_id(pid) is not None and get_node_by_id(pid).get('type') == 'treasure' for pid in n.get('parents', [])):
+                    weights['rest'] = weights['rest'] * REST_PENALTY_AFTER_TREASURE * rest_boost
+                else:
+                    weights['rest'] = weights['rest'] * rest_boost
+
+            # enforce non-consecutive rule for elite/rest by disallowing picks that violate it
+            # convert weights to lists for sampling
+            final_choices = []
+            final_weights = []
+            for t in choices:
+                w = weights.get(t, 0.0)
+                if w <= 0:
+                    continue
+                if t in ('elite', 'rest') and not can_be_nonconsecutive(n, t):
+                    # demote to zero weight if it would violate non-consecutive rule
+                    continue
+                final_choices.append(t)
+                final_weights.append(w)
+
+            # fallback: if no valid choices remain, default to monster
+            if not final_choices:
+                n['type'] = 'monster'
+            else:
+                pick = random.choices(final_choices, weights=final_weights, k=1)[0]
+                n['type'] = pick
 
     # Guarantee at least 3 elites and 3 shops, placed after level 4, not on rest/treasure/boss/start
     def pick_guaranteed(kind, count):
@@ -456,6 +547,53 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         for n in extra_shops:
             if n['id'] not in keep:
                 n['type'] = 'monster'
+
+    # Ensure branches that haven't seen a monster/elite for a while
+    # get at least one monster in that segment. This walks all paths
+    # from start nodes and inserts a monster if the gap >= threshold.
+    def enforce_monster_on_sparse_branches(graph, threshold=3):
+        id_to_node = {n['id']: n for lvl in graph for n in lvl}
+        children = {nid: [] for nid in id_to_node}
+        for lvl_nodes in graph:
+            for n in lvl_nodes:
+                for p in n.get('parents', []):
+                    if p in children:
+                        children[p].append(n['id'])
+
+        locked = set(['rest', 'treasure', 'boss', 'start'])
+
+        # DFS with path tracking
+        def dfs(node_id, path_ids):
+            path_ids.append(node_id)
+            # find last monster/elite index in path
+            last_idx = -1
+            for i, pid in enumerate(path_ids):
+                t = id_to_node[pid].get('type')
+                if t in ('monster', 'elite'):
+                    last_idx = i
+            gap = len(path_ids) - 1 - last_idx
+            if gap >= threshold:
+                # choose the first node after last monster/elite to convert
+                target_idx = last_idx + 1
+                if 0 <= target_idx < len(path_ids):
+                    target_node = id_to_node[path_ids[target_idx]]
+                    if target_node.get('type') not in locked:
+                        target_node['type'] = 'monster'
+                        # after insertion, reset last_idx to target_idx
+                        last_idx = target_idx
+            # traverse children
+            for cid in children.get(node_id, []):
+                # avoid cycles by checking presence in current path
+                if cid in path_ids:
+                    continue
+                dfs(cid, path_ids)
+            path_ids.pop()
+
+        # start DFS from all start nodes
+        for start_node in graph[0]:
+            dfs(start_node['id'], [])
+
+    enforce_monster_on_sparse_branches(graph, threshold=ENFORCE_MONSTER_THRESHOLD)
 
     # Safety final clamp: ensure no row exceeds MAX_PER_ROW by pairwise merging as needed.
     # This is a protective post-process in case earlier steps expanded rows beyond the cap.
