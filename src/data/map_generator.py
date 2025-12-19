@@ -670,6 +670,80 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             choices = [t for t, w in allowed]
             weights = {t: float(w) for t, w in allowed}
 
+            # --- New: adjust probabilities based on recent consecutive runs ---
+            # Consider 'hostile' category = monster or elite. If a chain of hostile nodes
+            # has length >= 2, increase chance to pick non-hostile types; conversely,
+            # if non-hostile runs >=2, increase chance to pick hostile types.
+            def get_node_by_id_local(nid):
+                for lvl_nodes in graph:
+                    for nn in lvl_nodes:
+                        if nn['id'] == nid:
+                            return nn
+                return None
+
+            def consecutive_category_from_parent(pid, hostile: bool = True):
+                # Walk single-parent chain and count consecutive nodes of given category
+                cur = get_node_by_id_local(pid)
+                cnt = 0
+                visited = set()
+                while cur is not None and cur['id'] not in visited:
+                    visited.add(cur['id'])
+                    tcur = cur.get('type')
+                    is_hostile = (tcur in ('monster', 'elite'))
+                    if hostile and is_hostile:
+                        cnt += 1
+                    elif not hostile and not is_hostile:
+                        cnt += 1
+                    else:
+                        break
+                    parents = cur.get('parents', [])
+                    if not parents:
+                        break
+                    cur = get_node_by_id_local(parents[0])
+                return cnt
+
+            # compute max run length among parents (take max over parent chains)
+            max_hostile_run = 0
+            max_nonhostile_run = 0
+            for pid in n.get('parents', []):
+                if pid is None:
+                    continue
+                run_h = consecutive_category_from_parent(pid, hostile=True)
+                run_nh = consecutive_category_from_parent(pid, hostile=False)
+                if run_h > max_hostile_run:
+                    max_hostile_run = run_h
+                if run_nh > max_nonhostile_run:
+                    max_nonhostile_run = run_nh
+
+            # helper: boost amount increases with run length (2->small, 3->bigger, 4->bigger)
+            def run_boost(length: int) -> float:
+                if length <= 1:
+                    return 0.0
+                if length == 2:
+                    return 0.12
+                if length == 3:
+                    return 0.22
+                if length == 4:
+                    return 0.32
+                return 0.42
+
+            bh = run_boost(max_hostile_run)
+            bnh = run_boost(max_nonhostile_run)
+            # Apply adjustments: if hostile run observed, reduce hostile weights and increase others
+            if bh > 0:
+                for tt in list(weights.keys()):
+                    if tt in ('monster', 'elite'):
+                        weights[tt] = max(0.0, weights.get(tt, 0.0) * (1.0 - bh))
+                    else:
+                        weights[tt] = weights.get(tt, 0.0) * (1.0 + bh)
+            # If non-hostile run observed, boost monster/elite
+            if bnh > 0:
+                for tt in list(weights.keys()):
+                    if tt in ('monster', 'elite'):
+                        weights[tt] = weights.get(tt, 0.0) * (1.0 + bnh)
+                    else:
+                        weights[tt] = max(0.0, weights.get(tt, 0.0) * (1.0 - bnh))
+
             # helper: get node by id
             def get_node_by_id(nid):
                 for lvl_nodes in graph:
@@ -796,13 +870,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
     elites = pick_guaranteed('elite', 3)
     shops = pick_guaranteed('shop', 3)
 
-    # Enforce placement caps (excluding fixed/guranteed placements):
-    # - rest: max 5 outside fixed rest rows (levels 5 and 13)
-    # - elite: max 5 additional elites besides the 3 guaranteed
-    # - shop: max 3 additional shops besides the 3 guaranteed
-    REST_CAP = 5
-    ELITE_EXTRA_CAP = 5
-    SHOP_EXTRA_CAP = 3
+    # Enforce placement caps (excluding fixed/guaranteed placements).
+    # Uses values from `params` (REST_CAP, ELITE_EXTRA_CAP, SHOP_EXTRA_CAP).
 
     # rest candidates (exclude fixed rest rows)
     rest_fixed_set = set(REST_ROWS)
@@ -998,14 +1067,52 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         upper_candidates = [n for lvl_idx, lvl in enumerate(graph) for n in lvl if lower_cut <= lvl_idx < LEVELS_ACTUAL - 1 and is_eligible_for_dark(n)]
         # pick up to 2 from each (seeded randomness via random)
         import math
-        if lower_candidates:
-            k = min(2, len(lower_candidates))
-            for n in random.sample(lower_candidates, k):
-                n['type'] = 'dark'
-        if upper_candidates:
-            k2 = min(2, len(upper_candidates))
-            for n in random.sample(upper_candidates, k2):
-                n['type'] = 'dark'
+        def place_dark_unique_by_level(candidates, max_per_level=1, limit=2):
+            """Place up to `limit` dark nodes choosing at most `max_per_level` per level.
+            Avoid overwriting guaranteed elites such that elite count would drop below required.
+            candidates: list of nodes (each node has 'level')."""
+            if not candidates:
+                return
+            # compute current elite counts and guaranteed threshold
+            guaranteed_elites = params.get('GUARANTEED_ELITES', 3)
+            current_elite_count = len([n for lvl in graph for n in lvl if n.get('type') == 'elite'])
+            # group nodes by their level index
+            by_level = {}
+            for n in candidates:
+                lvl = n.get('level', None)
+                by_level.setdefault(lvl, []).append(n)
+            # choose up to `limit` distinct levels
+            levels = list(by_level.keys())
+            if not levels:
+                return
+            k = min(limit, len(levels))
+            chosen_levels = random.sample(levels, k)
+            for lvl in chosen_levels:
+                nodes = by_level.get(lvl, [])
+                if not nodes:
+                    continue
+                # filter out nodes that would violate elite guarantees
+                eligible = []
+                for node in nodes:
+                    if node.get('type') != 'elite':
+                        eligible.append(node)
+                        continue
+                    # node is elite: avoid if it's a guaranteed elite or removing it would drop below required
+                    if node.get('id') in elite_fixed_ids:
+                        # skip guaranteed elites
+                        continue
+                    # if removing this elite would drop count below guaranteed, skip
+                    if current_elite_count <= guaranteed_elites:
+                        continue
+                    eligible.append(node)
+
+                if not eligible:
+                    continue
+                picked = random.choice(eligible)
+                picked['type'] = 'dark'
+
+        place_dark_unique_by_level(lower_candidates, limit=2)
+        place_dark_unique_by_level(upper_candidates, limit=2)
     except Exception:
         pass
 
@@ -1102,9 +1209,10 @@ def balance_choices(graph: List[List[Dict]], params: Dict | None = None, thresho
     rest_existing = [n for lvl_idx, lvl in enumerate(graph) if lvl_idx not in rest_fixed_rows for n in lvl if n.get('type') == 'rest']
     elite_existing = [n for lvl in graph for n in lvl if n.get('type') == 'elite']
     shop_existing = [n for lvl in graph for n in lvl if n.get('type') == 'shop']
-    rest_cap = params.get('REST_CAP', 5)
-    elite_extra_cap = params.get('ELITE_EXTRA_CAP', 5)
-    shop_extra_cap = params.get('SHOP_EXTRA_CAP', 3)
+    defaults = get_default_params()
+    rest_cap = params.get('REST_CAP', defaults.get('REST_CAP', 5))
+    elite_extra_cap = params.get('ELITE_EXTRA_CAP', defaults.get('ELITE_EXTRA_CAP', 1))
+    shop_extra_cap = params.get('SHOP_EXTRA_CAP', defaults.get('SHOP_EXTRA_CAP', 3))
 
     # process each level
     for lvl_idx, lvl in enumerate(graph):
