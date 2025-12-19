@@ -42,7 +42,7 @@ def get_default_params() -> Dict:
         'BRANCH_WIDTH_TARGET': 4,
         'BRANCH_BOOST_PROB': 0.15,
         # guaranteed counts
-        'GUARANTEED_ELITES': 3,
+        'GUARANTEED_ELITES': 4,
         'GUARANTEED_SHOPS': 3,
         # minimum required non-empty steps on any start->boss path; if None, defaults to LEVELS-2
         'MIN_REQUIRED_STEPS': None,
@@ -62,6 +62,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         params = get_default_params()
 
     LEVELS = params['LEVELS']
+    # cutoff for "lower" half of the map (used for small local adjustments)
+    LOWER_HALF_CUT = max(1, LEVELS // 2)
     MAX_PER_ROW = params['MAX_PER_ROW']
     START_WEIGHTS = params['start_weights']
     TYPE_PROBS = params['type_probs']
@@ -696,7 +698,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
 
     # mark remaining nodes probabilistically, respecting basic constraints
     for lvl in range(1, LEVELS - 1):
-        for n in graph[lvl]:
+        # enumerate nodes to allow per-position adjustments (e.g. 5番目ノードの補正)
+        for idx_n, n in enumerate(graph[lvl]):
             if 'type' in n and n['type'] in ('rest', 'treasure', 'boss', 'monster'):
                 continue
             # disallow elite/rest before level 4 (5th row onwards requirement)
@@ -717,6 +720,23 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             # sample with weights from allowed, but apply small contextual boosts
             choices = [t for t, w in allowed]
             weights = {t: float(w) for t, w in allowed}
+
+            # adjust: slightly reduce elite probability for "低層5マス目"
+            # If this node is in the lower half and is the 5th slot (index 4), scale down elite weight
+            try:
+                if lvl < LOWER_HALF_CUT and idx_n == 4 and 'elite' in weights:
+                    weights['elite'] = weights.get('elite', 0.0) * 0.6  # reduce by 40%
+            except Exception:
+                pass
+
+            # Strongly reduce chance to create a second+ elite in the same lower-level row
+            try:
+                if lvl < LOWER_HALF_CUT and 'elite' in weights:
+                    existing_elites_in_row = sum(1 for x in graph[lvl] if x.get('type') == 'elite')
+                    if existing_elites_in_row >= 1:
+                        weights['elite'] = weights.get('elite', 0.0) * 0.3  # reduce to 30%
+            except Exception:
+                pass
 
             # --- New: adjust probabilities based on recent consecutive runs ---
             # Consider 'hostile' category = monster or elite. If a chain of hostile nodes
