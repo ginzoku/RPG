@@ -729,15 +729,6 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             except Exception:
                 pass
 
-            # Strongly reduce chance to create a second+ elite in the same lower-level row
-            try:
-                if lvl < LOWER_HALF_CUT and 'elite' in weights:
-                    existing_elites_in_row = sum(1 for x in graph[lvl] if x.get('type') == 'elite')
-                    if existing_elites_in_row >= 1:
-                        weights['elite'] = weights.get('elite', 0.0) * 0.3  # reduce to 30%
-            except Exception:
-                pass
-
             # --- New: adjust probabilities based on recent consecutive runs ---
             # Consider 'hostile' category = monster or elite. If a chain of hostile nodes
             # has length >= 2, increase chance to pick non-hostile types; conversely,
@@ -785,15 +776,18 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
 
             # helper: boost amount increases with run length (2->small, 3->bigger, 4->bigger)
             def run_boost(length: int) -> float:
+                # Stronger bias: make it much more likely to break long runs
+                # length==2 -> modest boost, length==3 -> ~60% chance to change (reduce same-type weight by 60%)
+                # length==4 -> almost certain change
                 if length <= 1:
                     return 0.0
                 if length == 2:
-                    return 0.12
+                    return 0.20
                 if length == 3:
-                    return 0.22
+                    return 0.60
                 if length == 4:
-                    return 0.32
-                return 0.42
+                    return 1.0
+                return 0.99
 
             bh = run_boost(max_hostile_run)
             bnh = run_boost(max_nonhostile_run)
