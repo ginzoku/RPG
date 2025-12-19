@@ -2,6 +2,7 @@
 import pygame
 from ..config import settings
 from ..scenes.map_scene import MapScene # 修正
+from ..utils.map_layout import compute_node_positions
 
 # Toggle node expected-score display here (set False to disable)
 SHOW_NODE_SCORES = False
@@ -77,31 +78,17 @@ class MapView:
 
             # draw graph onto overlay if available, otherwise draw fallback grid onto overlay
             if not fallback_grid:
-                node_positions = {}
                 expected_scores = {}
-                # 行間とノードサイズを少しコンパクトにして見渡しやすくする
-                level_margin = 80
-                level_spacing = 80  # 1行あたりの縦間隔（px） （半分に短縮）
+                # Compute positions using shared utility (keeps MapView and MapScene consistent)
                 node_size = 32
-                # increase horizontal padding between nodes to avoid line/node overlap
+                level_margin = 80
+                level_spacing = 80
                 h_padding = 40
-                for lvl_idx, nodes in enumerate(graph):
-                    y = int(level_margin + lvl_idx * level_spacing)
-                    # apply vertical scroll offset
-                    y -= int(getattr(map_scene, 'overlay_scroll', 0) or 0)
-                    count = len(nodes)
-                    if count == 0:
-                        continue
-                    total_w = count * node_size + (count - 1) * h_padding
-                    start_x = (settings.SCREEN_WIDTH - total_w) // 2
-                    for i, node in enumerate(nodes):
-                        x = int(start_x + i * (node_size + h_padding))
-                        cx = x + node_size // 2
-                        cy = y
-                        node_positions[node['id']] = (cx, cy)
-
-                    # build id->node map for quick type checks when drawing
-                    id_to_node = {n['id']: n for lvl_nodes in graph for n in lvl_nodes}
+                node_positions_full, per_level = compute_node_positions(graph, settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT, getattr(map_scene, 'overlay_scroll', 0), node_size=node_size, level_margin=level_margin, level_spacing=level_spacing, h_padding=h_padding)
+                # node_positions for drawing convenience: id -> (cx, cy)
+                node_positions = {nid: (cx, cy) for nid, (cx, cy, r) in node_positions_full.items()}
+                # build id->node map for quick type checks when drawing
+                id_to_node = {n['id']: n for lvl_nodes in graph for n in lvl_nodes}
 
                 # compute expected downstream scores if enabled
                 if SHOW_NODE_SCORES:
@@ -137,9 +124,8 @@ class MapView:
 
                 # expose node positions to scene for hit-testing
                 try:
-                    # store rects (x,y,w,h) for collision checks using uniform node_size
-                    r = node_size // 2
-                    map_scene.node_positions = {nid: pygame.Rect(cx - r, cy - r, r * 2, r * 2) for nid, (cx, cy) in node_positions.items()}
+                    # store rects (x,y,w,h) for collision checks using computed radius
+                    map_scene.node_positions = {nid: pygame.Rect(cx - r, cy - r, r * 2, r * 2) for nid, (cx, cy, r) in node_positions_full.items()}
                 except Exception:
                     map_scene.node_positions = {}
 
