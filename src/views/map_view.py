@@ -135,6 +135,14 @@ class MapView:
                             if p in children_map:
                                 children_map[p].append(n['id'])
 
+                # expose node positions to scene for hit-testing
+                try:
+                    # store rects (x,y,w,h) for collision checks using uniform node_size
+                    r = node_size // 2
+                    map_scene.node_positions = {nid: pygame.Rect(cx - r, cy - r, r * 2, r * 2) for nid, (cx, cy) in node_positions.items()}
+                except Exception:
+                    map_scene.node_positions = {}
+
                 # draw connections onto overlay
                 # For each node, draw a straight connector from each parent to the node.
                 for lvl_idx, nodes in enumerate(graph):

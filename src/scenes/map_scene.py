@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import pygame
 from ..components.enemy_symbol import EnemySymbol # 修正
+from ..data.enemy_group_data import ENEMY_GROUPS
+import random
+from ..config import settings
 from ..components.npc import Npc
 from ..config import settings
 from ..data.map_data import MAP_DATA
@@ -89,6 +92,14 @@ class MapScene:
             if self.player_rect.colliderect(enemy.rect):
                 self.collided_enemy = enemy
                 break # 最初の衝突でループを抜ける
+
+        # If a pending battle was scheduled by click handling, honor it now
+        try:
+            if getattr(self, '_pending_battle', None):
+                self.collided_enemy = self._pending_battle
+                self._pending_battle = None
+        except Exception:
+            pass
     
     def remove_enemy(self, enemy_to_remove: EnemySymbol):
         self.enemies.remove(enemy_to_remove)

@@ -3,6 +3,10 @@ import pygame
 from typing import Optional
 from ..scenes.map_scene import MapScene
 from ..config import settings
+from ..components.enemy_symbol import EnemySymbol
+from ..components.npc import Npc
+from ..data.enemy_group_data import ENEMY_GROUPS
+import random
 
 class MapController:
     """マップシーンの入力を処理するクラス"""
@@ -80,6 +84,54 @@ class MapController:
                     map_scene.overlay_active = not getattr(map_scene, 'overlay_active', False)
                     # consume this event (don't treat as other interactions)
                     continue
+
+                # If overlay is active and we have a generated graph, check for node clicks
+                if getattr(map_scene, 'overlay_active', False):
+                    # hit-test against node positions if MapView exposed them
+                    node_positions = getattr(map_scene, 'node_positions', None)
+                    graph = getattr(map_scene, 'map_graph', None)
+                    if node_positions and graph:
+                        for nid, rect in node_positions.items():
+                            if rect.collidepoint(mx, my):
+                                # find node object by id
+                                node_obj = None
+                                for lvl in graph:
+                                    for n in lvl:
+                                        if n.get('id') == nid:
+                                            node_obj = n
+                                            break
+                                    if node_obj:
+                                        break
+                                if not node_obj:
+                                    break
+                                t = node_obj.get('type', 'monster')
+                                # monster/elite/boss -> initiate battle by setting collided_enemy
+                                if t in ('monster', 'elite', 'boss'):
+                                    try:
+                                        group_ids = list(ENEMY_GROUPS.keys())
+                                        gid = random.choice(group_ids) if group_ids else 'default'
+                                        # create a synthetic EnemySymbol for pending transition
+                                        enemy_sym = EnemySymbol(0, 0, 32, gid)
+                                        # set pending battle so MapScene.update doesn't clear it
+                                        map_scene._pending_battle = enemy_sym
+                                    except Exception:
+                                        map_scene._pending_battle = None
+                                    # consume the click event (no ConversationScene)
+                                    return None
+                                else:
+                                    # event/shop/rest/treasure/dark -> open conversation with default id
+                                    # choose a conversation id mapping (fallbacks)
+                                    conv_map = {
+                                        'event': 'test_choice_conversation',
+                                        'shop': 'npc_1_intro',
+                                        'rest': 'npc_1_intro',
+                                        'treasure': 'npc_1_intro',
+                                        'dark': 'test_choice_conversation'
+                                    }
+                                    conv = conv_map.get(t, 'test_choice_conversation')
+                                    # return a temporary Npc-like object with conversation_id
+                                    temp_npc = Npc(-100, -100, map_scene.grid_size or 32, conv)
+                                    return temp_npc
 
             if event.type == pygame.KEYDOWN:
                 # 移動処理
