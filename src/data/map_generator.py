@@ -14,7 +14,7 @@ from typing import List, Dict
 
 def get_default_params() -> Dict:
     return {
-        'LEVELS': 16,
+        'LEVELS': 18,
         'MAX_PER_ROW': 5,
         # start row weights for [1,2,3] counts (percent)
         'start_weights': [10, 35, 55],
@@ -213,12 +213,46 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         #  - If the previous row has 3 or fewer nodes, preserve that count and create one rest node per previous node (one-to-one).
         #  - If the previous row has more than 3 nodes, merge adjacent parents until exactly 3 rest nodes remain.
         if lvl in REST_ROWS:
-            if prev_count <= 3:
+            # For the boss-pre rest row, keep deterministic behavior (one-to-one or merge to 3)
+            if boss_pre_rest is not None and lvl == boss_pre_rest:
+                if prev_count <= 3:
+                    for p in prev:
+                        row.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': 'rest'})
+                        nid += 1
+                    graph.append(row)
+                    if lvl != 0 and lvl != LEVELS - 1:
+                        while len(graph[-1]) < 2:
+                            src_node = graph[-1][0]
+                            new_node = {'id': nid, 'level': lvl, 'parents': list(src_node.get('parents', [])), 'type': src_node.get('type', 'monster')}
+                            nid += 1
+                            graph[-1].append(new_node)
+                    continue
+                else:
+                    temp = []
+                    for p in prev:
+                        temp.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': 'rest'})
+                        nid += 1
+                    need = len(temp) - 3
+                    if need > 0:
+                        temp, nid = pairwise_merge_k(temp, need, nid)
+                    row = temp
+                    graph.append(row)
+                    continue
+
+            # For other configured rest rows: apply the "guaranteed 2 + random up to 3" rule
+            # but only for rest rows that occur after the configured fixed rest rows (exclude boss_pre_rest).
+            # This yields up to 5 rest nodes per such row.
+            if prev_count == 0:
+                graph.append([])
+                continue
+            # only apply this policy to rest rows after the highest fixed rest row
+            anchor = max(REST_ROWS) if REST_ROWS else -1
+            if lvl <= anchor:
+                # treat like fallback: create one node per previous parent but mark none as rest by default
                 for p in prev:
-                    row.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': 'rest'})
+                    row.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': p.get('type', 'monster')})
                     nid += 1
                 graph.append(row)
-                # ensure at least 2 nodes for non-first, non-boss rows
                 if lvl != 0 and lvl != LEVELS - 1:
                     while len(graph[-1]) < 2:
                         src_node = graph[-1][0]
@@ -226,19 +260,33 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                         nid += 1
                         graph[-1].append(new_node)
                 continue
+
+            guaranteed = 2
+            random_up_to = 3
+            # pick guaranteed parents first (if available)
+            if prev_count <= guaranteed:
+                guaranteed_set = set(p['id'] for p in prev)
+                extra_needed = 0
             else:
-                # start by making one node per previous parent, then merge down to 3
-                temp = []
-                for p in prev:
-                    temp.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': 'rest'})
+                guaranteed_set = set(p['id'] for p in random.sample(prev, guaranteed))
+                remaining_parents = [p for p in prev if p['id'] not in guaranteed_set]
+                extra_limit = min(random_up_to, len(remaining_parents))
+                extra_count = random.randint(0, extra_limit)
+                extra_set = set(p['id'] for p in random.sample(remaining_parents, extra_count))
+                guaranteed_set |= extra_set
+            rest_parents = guaranteed_set
+            for p in prev:
+                node_type = 'rest' if p['id'] in rest_parents else p.get('type', 'monster')
+                row.append({'id': nid, 'level': lvl, 'parents': [p['id']], 'type': node_type})
+                nid += 1
+            graph.append(row)
+            if lvl != 0 and lvl != LEVELS - 1:
+                while len(graph[-1]) < 2:
+                    src_node = graph[-1][0]
+                    new_node = {'id': nid, 'level': lvl, 'parents': list(src_node.get('parents', [])), 'type': src_node.get('type', 'monster')}
                     nid += 1
-                # merge adjacent until 3 remain using non-overlapping pairwise merges
-                need = len(temp) - 3
-                if need > 0:
-                    temp, nid = pairwise_merge_k(temp, need, nid)
-                row = temp
-                graph.append(row)
-                continue
+                    graph[-1].append(new_node)
+            continue
 
         if lvl in TREASURE_ROWS:
             # Treasure row: prefer one-to-one mapping from previous nodes when there are <=3 parents.
@@ -1067,12 +1115,14 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         upper_candidates = [n for lvl_idx, lvl in enumerate(graph) for n in lvl if lower_cut <= lvl_idx < LEVELS_ACTUAL - 1 and is_eligible_for_dark(n)]
         # pick up to 2 from each (seeded randomness via random)
         import math
-        def place_dark_unique_by_level(candidates, max_per_level=1, limit=2):
+        def place_dark_unique_by_level(candidates, already_chosen_levels=None, max_per_level=1, limit=2):
             """Place up to `limit` dark nodes choosing at most `max_per_level` per level.
             Avoid overwriting guaranteed elites such that elite count would drop below required.
             candidates: list of nodes (each node has 'level')."""
+            if already_chosen_levels is None:
+                already_chosen_levels = set()
             if not candidates:
-                return
+                return []
             # compute current elite counts and guaranteed threshold
             guaranteed_elites = params.get('GUARANTEED_ELITES', 3)
             current_elite_count = len([n for lvl in graph for n in lvl if n.get('type') == 'elite'])
@@ -1086,7 +1136,19 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             if not levels:
                 return
             k = min(limit, len(levels))
-            chosen_levels = random.sample(levels, k)
+            # choose up to k levels such that no two chosen levels are adjacent
+            shuffled = levels[:]
+            random.shuffle(shuffled)
+            chosen_levels = []
+            for lvl in shuffled:
+                if len(chosen_levels) >= k:
+                    break
+                # skip if adjacent to any already chosen level (including ones passed in)
+                if any(abs(lvl - c) == 1 for c in chosen_levels) or any(abs(lvl - c) == 1 for c in already_chosen_levels):
+                    continue
+                chosen_levels.append(lvl)
+
+            # do NOT fall back to adjacent levels; if we couldn't select k non-adjacent levels, place fewer
             for lvl in chosen_levels:
                 nodes = by_level.get(lvl, [])
                 if not nodes:
@@ -1110,9 +1172,10 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     continue
                 picked = random.choice(eligible)
                 picked['type'] = 'dark'
+            return chosen_levels
 
-        place_dark_unique_by_level(lower_candidates, limit=2)
-        place_dark_unique_by_level(upper_candidates, limit=2)
+        chosen_lower = place_dark_unique_by_level(lower_candidates, already_chosen_levels=None, limit=2)
+        _ = place_dark_unique_by_level(upper_candidates, already_chosen_levels=set(chosen_lower), limit=2)
     except Exception:
         pass
 
