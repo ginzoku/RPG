@@ -1134,7 +1134,7 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             # choose up to `limit` distinct levels
             levels = list(by_level.keys())
             if not levels:
-                return
+                return []
             k = min(limit, len(levels))
             # choose up to k levels such that no two chosen levels are adjacent
             shuffled = levels[:]
@@ -1149,6 +1149,31 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 chosen_levels.append(lvl)
 
             # do NOT fall back to adjacent levels; if we couldn't select k non-adjacent levels, place fewer
+            # ensure we won't convert all rest nodes to dark
+            total_rest = sum(1 for lvl in graph for n in lvl if n.get('type') == 'rest')
+            # count how many rest nodes would be converted by tentative picks
+            tentative_rest_conversions = 0
+            for lvl in chosen_levels:
+                nodes = by_level.get(lvl, [])
+                for node in nodes:
+                    if node.get('type') == 'rest':
+                        tentative_rest_conversions += 1
+
+            # if converting would remove all rest nodes, reduce chosen_levels until safe
+            if total_rest > 0 and tentative_rest_conversions >= total_rest:
+                # try removing levels that contain rest nodes first
+                new_chosen = []
+                for lvl in chosen_levels:
+                    nodes = by_level.get(lvl, [])
+                    has_rest = any(n.get('type') == 'rest' for n in nodes)
+                    if has_rest:
+                        # skip this level to preserve some rest nodes
+                        continue
+                    new_chosen.append(lvl)
+                    if len(new_chosen) >= k:
+                        break
+                chosen_levels = new_chosen
+
             for lvl in chosen_levels:
                 nodes = by_level.get(lvl, [])
                 if not nodes:
