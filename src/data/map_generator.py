@@ -14,7 +14,7 @@ from typing import List, Dict
 
 def get_default_params() -> Dict:
     return {
-        'LEVELS': 18,
+        'LEVELS': 17,
         'MAX_PER_ROW': 5,
         # start row weights for [1,2,3] counts (percent)
         'start_weights': [10, 35, 55],
@@ -27,7 +27,7 @@ def get_default_params() -> Dict:
         'treasure_rows': [9],
         # placement caps (excluding fixed/guaranteed placements)
         'REST_CAP': 5,
-        'ELITE_EXTRA_CAP': 1,
+        'ELITE_EXTRA_CAP': 2,
         'SHOP_EXTRA_CAP': 2,
         # branch/boost tuning
         'ENFORCE_MONSTER_THRESHOLD': 3,
@@ -39,10 +39,10 @@ def get_default_params() -> Dict:
         # penalty/discount multipliers
         'REST_PENALTY_AFTER_TREASURE': 0.5,
         # branching tuning: if a branch hasn't reached this width (excluding rest/treasure rows), boost branching probability
-        'BRANCH_WIDTH_TARGET': 4,
-        'BRANCH_BOOST_PROB': 0.15,
+        'BRANCH_WIDTH_TARGET': 3,
+        'BRANCH_BOOST_PROB': 0.25,
         # guaranteed counts
-        'GUARANTEED_ELITES': 4,
+        'GUARANTEED_ELITES': 3,
         'GUARANTEED_SHOPS': 3,
         # minimum required non-empty steps on any start->boss path; if None, defaults to LEVELS-2
         'MIN_REQUIRED_STEPS': None,
@@ -668,16 +668,45 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
     levels_map = build_levels_map(graph)
 
     def can_be_nonconsecutive(node, t):
-        # Prevent consecutive elite/rest/shop along a single-parent chain
+        # Prevent creating long consecutive runs of the same type along any single-parent chain.
+        # Allow up to 2 consecutive (parent + child), but disallow if this would create 3+ in a row.
         parents = node.get('parents', [])
         if not parents:
             return True
-        # if any parent is of same type, disallow for elite/rest
+
+        def count_consecutive_up(pid):
+            # follow single-parent chain upwards counting consecutive nodes of type t
+            cur_id = pid
+            cnt = 0
+            visited = set()
+            while cur_id is not None and cur_id not in visited:
+                visited.add(cur_id)
+                # find node
+                pn = None
+                for lvl_nodes in levels_map.values():
+                    for xn in lvl_nodes:
+                        if xn['id'] == cur_id:
+                            pn = xn
+                            break
+                    if pn is not None:
+                        break
+                if pn is None:
+                    break
+                if pn.get('type') == t:
+                    cnt += 1
+                else:
+                    break
+                parents_up = pn.get('parents', [])
+                if not parents_up:
+                    break
+                # follow the first parent to continue the single-parent chain
+                cur_id = parents_up[0]
+            return cnt
+
         for pid in parents:
-            for lvl_nodes in levels_map.values():
-                for pn in lvl_nodes:
-                    if pn['id'] == pid and pn.get('type') == t:
-                        return False
+            if count_consecutive_up(pid) >= 2:
+                # parent chain already has 2 consecutive of type t => placing here would be 3rd
+                return False
         return True
 
     # Ensure guaranteed elites and shops later; first mark special fixed rows
@@ -952,12 +981,98 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             n['type'] = 'elite'
             elites.append(n)
 
+    # Ensure at least 3 rest nodes placed after the first configured fixed rest row,
+    # and try to spread them across different levels. Track guaranteed rest ids
+    # so they are not removed by later trimming.
+    rest_guaranteed_ids = set(n['id'] for lvl_idx, lvl in enumerate(graph) for n in lvl if lvl_idx in REST_ROWS and n.get('type') == 'rest')
+    try:
+        required_after = 3
+        if REST_ROWS:
+            first_fixed = min(REST_ROWS)
+        else:
+            first_fixed = max(0, LEVELS - 2)
+        # count existing rest nodes strictly after the first fixed rest row
+        rest_after = [n for lvl_idx, lvl in enumerate(graph) if lvl_idx > first_fixed for n in lvl if n.get('type') == 'rest']
+        need = max(0, required_after - len(rest_after))
+        if need > 0:
+            # candidate levels to place rests (avoid fixed rest rows and treasure rows)
+            candidate_levels = [lvl for lvl in range(first_fixed + 1, LEVELS - 1) if lvl not in REST_ROWS and lvl not in TREASURE_ROWS]
+            random.shuffle(candidate_levels)
+            for lvl in candidate_levels:
+                if need <= 0:
+                    break
+                # pick an eligible node on this level to convert to rest
+                candidates = [n for n in graph[lvl] if n.get('type') not in ('rest', 'treasure', 'boss', 'start', 'shop', 'elite', 'dark')]
+                random.shuffle(candidates)
+                chosen = None
+                for n in candidates:
+                    if can_be_nonconsecutive(n, 'rest'):
+                        chosen = n
+                        break
+                if chosen is None and candidates:
+                    chosen = candidates[0]
+                if chosen is not None:
+                    chosen['type'] = 'rest'
+                    rest_guaranteed_ids.add(chosen['id'])
+                    need -= 1
+            # If still need rests, widen search and force-place respecting priority:
+            if need > 0:
+                # prioritize monster/event, then shop, then elite (avoid guaranteed elites)
+                id_to_node_all = {n['id']: n for lvl in graph for n in lvl}
+                candidates_mon_evt = []
+                candidates_shop = []
+                candidates_elite = []
+                for lvl in range(first_fixed + 1, LEVELS - 1):
+                    if lvl in TREASURE_ROWS:
+                        continue
+                    for n in graph[lvl]:
+                        t = n.get('type')
+                        if t in ('rest', 'treasure', 'boss', 'start'):
+                            continue
+                        if t in ('monster', 'event'):
+                            candidates_mon_evt.append(n)
+                        elif t == 'shop':
+                            candidates_shop.append(n)
+                        elif t == 'elite' and n.get('id') not in elite_fixed_ids:
+                            candidates_elite.append(n)
+                # attempt to pick from these pools while preferring spread across levels
+                def pick_from_pool(pool):
+                    levels_seen = set()
+                    for n in pool:
+                        lvl = n.get('level')
+                        if lvl in levels_seen:
+                            continue
+                        if not can_be_nonconsecutive(n, 'rest'):
+                            continue
+                        levels_seen.add(lvl)
+                        return n
+                    # fallback: return first available
+                    return pool[0] if pool else None
+
+                for pool in (candidates_mon_evt, candidates_shop, candidates_elite):
+                    while need > 0 and pool:
+                        chosen = pick_from_pool(pool)
+                        if chosen is None:
+                            break
+                        chosen['type'] = 'rest'
+                        rest_guaranteed_ids.add(chosen['id'])
+                        need -= 1
+                        # remove chosen from pool
+                        pool = [x for x in pool if x['id'] != chosen['id']]
+    except Exception:
+        pass
+
     # Enforce placement caps (excluding fixed/guaranteed placements).
     # Uses values from `params` (REST_CAP, ELITE_EXTRA_CAP, SHOP_EXTRA_CAP).
 
     # rest candidates (exclude fixed rest rows)
     rest_fixed_set = set(REST_ROWS)
-    rest_candidates = [n for lvl_idx, lvl_nodes in enumerate(graph) if lvl_idx not in rest_fixed_set for n in lvl_nodes if n.get('type') == 'rest']
+    # exclude fixed/guaranteed rest ids from trimming
+    try:
+        rgids = rest_guaranteed_ids
+    except NameError:
+        rgids = set()
+    rest_candidates = [n for lvl_idx, lvl_nodes in enumerate(graph) if lvl_idx not in rest_fixed_set for n in lvl_nodes if n.get('type') == 'rest' and n['id'] not in rgids]
     if len(rest_candidates) > REST_CAP:
         keep = set(n['id'] for n in random.sample(rest_candidates, REST_CAP))
         for n in rest_candidates:
@@ -1274,6 +1389,28 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     break
                 n['type'] = 'elite'
                 current_elites.append(n)
+    except Exception:
+        pass
+
+    # Enforce hard cap: no single-parent chain should have more than 2 consecutive elites.
+    try:
+        id_to_node_all = {n['id']: n for lvl in graph for n in lvl}
+        for lvl_idx in range(len(graph)):
+            for n in list(graph[lvl_idx]):
+                if n.get('type') != 'elite':
+                    continue
+                # count consecutive elites ending at this node following parents[0]
+                cnt = 0
+                cur = n
+                while cur is not None and cur.get('type') == 'elite':
+                    cnt += 1
+                    parents = cur.get('parents', [])
+                    if not parents:
+                        break
+                    cur = id_to_node_all.get(parents[0])
+                if cnt > 2:
+                    # demote this node to monster to break the run
+                    n['type'] = 'monster'
     except Exception:
         pass
 
