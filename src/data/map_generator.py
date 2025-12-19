@@ -28,7 +28,7 @@ def get_default_params() -> Dict:
         # placement caps (excluding fixed/guaranteed placements)
         'REST_CAP': 5,
         'ELITE_EXTRA_CAP': 1,
-        'SHOP_EXTRA_CAP': 3,
+        'SHOP_EXTRA_CAP': 2,
         # branch/boost tuning
         'ENFORCE_MONSTER_THRESHOLD': 3,
         'BRANCH_MONSTER_THRESHOLD': 3,
@@ -918,6 +918,26 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
     elites = pick_guaranteed('elite', 3)
     shops = pick_guaranteed('shop', 3)
 
+    # If we failed to place the guaranteed number of elites (due to conflicts),
+    # force-place additional elites in eligible locations while avoiding fixed types.
+    required_elites = params.get('GUARANTEED_ELITES', 3)
+    if len(elites) < required_elites:
+        # collect eligible fallback candidates (levels 4..LEVELS-2)
+        fallback_candidates = []
+        for lvl in range(4, LEVELS - 1):
+            for n in graph[lvl]:
+                if n.get('type') in ('rest', 'treasure', 'boss', 'start', 'shop'):
+                    continue
+                if n.get('type') == 'elite':
+                    continue
+                fallback_candidates.append(n)
+        random.shuffle(fallback_candidates)
+        for n in fallback_candidates:
+            if len(elites) >= required_elites:
+                break
+            n['type'] = 'elite'
+            elites.append(n)
+
     # Enforce placement caps (excluding fixed/guaranteed placements).
     # Uses values from `params` (REST_CAP, ELITE_EXTRA_CAP, SHOP_EXTRA_CAP).
 
@@ -960,7 +980,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                     if p in children:
                         children[p].append(n['id'])
 
-        locked = set(['rest', 'treasure', 'boss', 'start'])
+        # Protect these types from being overwritten by sparse-branch enforcement
+        locked = set(['rest', 'treasure', 'boss', 'start', 'elite'])
 
         # DFS with path tracking
         def dfs(node_id, path_ids):
@@ -978,7 +999,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 if 0 <= target_idx < len(path_ids):
                     target_node = id_to_node[path_ids[target_idx]]
                     # Do not enforce monsters on early rows (levels 0-3)
-                    if target_node.get('type') not in locked and target_node.get('level', 0) >= 4:
+                    # Do not convert guaranteed elites (by id) or locked types
+                    if target_node.get('type') not in locked and target_node.get('level', 0) >= 4 and target_node.get('id') not in elite_fixed_ids:
                         target_node['type'] = 'monster'
                         # after insertion, reset last_idx to target_idx
                         last_idx = target_idx
@@ -1013,7 +1035,24 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
                 continue
             # create merged node
             merged_id = nid
-            merged_node = {'id': merged_id, 'level': lvl_idx, 'parents': list(pset), 'merged_from': True}
+            # preserve a meaningful type when merging nodes: prefer elite > rest > treasure > shop > event > monster
+            merged_type = None
+            for n in nodes_group:
+                t = n.get('type')
+                if t == 'elite':
+                    merged_type = 'elite'
+                    break
+                if merged_type is None and t == 'rest':
+                    merged_type = 'rest'
+                if merged_type is None and t == 'treasure':
+                    merged_type = 'treasure'
+                if merged_type is None and t == 'shop':
+                    merged_type = 'shop'
+                if merged_type is None and t == 'event':
+                    merged_type = 'event'
+            if merged_type is None:
+                merged_type = 'monster'
+            merged_node = {'id': merged_id, 'level': lvl_idx, 'parents': list(pset), 'merged_from': True, 'type': merged_type}
             nid += 1
             # replace nodes in level with merged_node (keep original order: place merged at first occurrence)
             first_idx = min(lvl_nodes.index(n) for n in nodes_group)
@@ -1109,7 +1148,8 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
         lower_cut = max(1, LEVELS_ACTUAL // 2)
         # exclude fixed/special nodes so we don't overwrite rest/treasure/start/boss
         def is_eligible_for_dark(n):
-            return n.get('type') not in ('rest', 'treasure', 'boss', 'start')
+            # Do not place dark on special nodes or shops
+            return n.get('type') not in ('rest', 'treasure', 'boss', 'start', 'shop')
 
         lower_candidates = [n for lvl_idx, lvl in enumerate(graph) for n in lvl if 0 < lvl_idx < lower_cut and is_eligible_for_dark(n)]
         upper_candidates = [n for lvl_idx, lvl in enumerate(graph) for n in lvl if lower_cut <= lvl_idx < LEVELS_ACTUAL - 1 and is_eligible_for_dark(n)]
@@ -1201,6 +1241,25 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
 
         chosen_lower = place_dark_unique_by_level(lower_candidates, already_chosen_levels=None, limit=2)
         _ = place_dark_unique_by_level(upper_candidates, already_chosen_levels=set(chosen_lower), limit=2)
+    except Exception:
+        pass
+
+    # Final safety: ensure guaranteed elites are present. Some prior passes
+    # (coalesce/forced conversions) may have reduced elites below the required
+    # threshold; enforce here by promoting eligible nodes if needed.
+    try:
+        required_elites = params.get('GUARANTEED_ELITES', 3)
+        current_elites = [n for lvl in graph for n in lvl if n.get('type') == 'elite']
+        if len(current_elites) < required_elites:
+            # choose eligible nodes excluding fixed special types and rest/treasure/boss/start
+            eligible = [n for lvl_idx in range(4, len(graph) - 1) for n in graph[lvl_idx]
+                        if n.get('type') not in ('rest', 'treasure', 'boss', 'start', 'shop', 'dark', 'elite')]
+            random.shuffle(eligible)
+            for n in eligible:
+                if len(current_elites) >= required_elites:
+                    break
+                n['type'] = 'elite'
+                current_elites.append(n)
     except Exception:
         pass
 
