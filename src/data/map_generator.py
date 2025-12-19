@@ -981,6 +981,12 @@ def generate(seed: int | None = None, params: Dict | None = None) -> List[List[D
             n['type'] = 'elite'
             elites.append(n)
 
+    # record fixed elite ids early so later placement logic can reference them
+    try:
+        elite_fixed_ids = set(n['id'] for n in elites)
+    except Exception:
+        elite_fixed_ids = set()
+
     # Ensure at least 3 rest nodes placed after the first configured fixed rest row,
     # and try to spread them across different levels. Track guaranteed rest ids
     # so they are not removed by later trimming.
