@@ -157,6 +157,7 @@ class MapView:
                                 pygame.draw.line(overlay, (140, 140, 140), (x1, y1), (x2, y2), 3)
 
                 # draw nodes onto overlay (after connections so nodes overlay lines)
+                enabled_nodes = getattr(map_scene, 'enabled_nodes', None)
                 for lvl_idx, nodes in enumerate(graph):
                     for node in nodes:
                         pos = node_positions.get(node['id'])
@@ -185,8 +186,21 @@ class MapView:
                         # skip drawing if off-screen to save time
                         if cy + r < 0 or cy - r > settings.SCREEN_HEIGHT:
                             continue
-                        pygame.draw.circle(overlay, color, (cx, cy), r)
-                        pygame.draw.circle(overlay, (30, 30, 30), (cx, cy), r, 2)
+                        # dim nodes that are not yet enabled by reducing original color brightness
+                        if enabled_nodes is not None and node.get('id') not in enabled_nodes:
+                            try:
+                                factor = 0.65
+                                draw_color = tuple(max(0, min(255, int(c * factor))) for c in color)
+                                # slightly darker border for disabled nodes
+                                border_color = tuple(max(0, min(255, int(b * 0.6))) for b in (30, 30, 30))
+                            except Exception:
+                                draw_color = (60, 60, 60)
+                                border_color = (30, 30, 30)
+                        else:
+                            draw_color = color
+                            border_color = (30, 30, 30)
+                        pygame.draw.circle(overlay, draw_color, (cx, cy), r)
+                        pygame.draw.circle(overlay, border_color, (cx, cy), r, 2)
                         # draw expected score label if enabled
                         if SHOW_NODE_SCORES and node.get('id') in expected_scores:
                             val = expected_scores.get(node['id'], 0.0)

@@ -101,8 +101,14 @@ class GameController:
                     # start map conversation
                     def _conv_finished(result=None):
                         try:
-                            # mark to skip next map interaction (same-frame Enter press)
-                            self._skip_next_map_interaction = True
+                                # mark to skip next map interaction (same-frame Enter press)
+                                self._skip_next_map_interaction = True
+                                # If this conversation was started from a map node, mark that node completed
+                                try:
+                                    if hasattr(interaction_target, '_map_node_id'):
+                                        self.map_scene.mark_node_completed(interaction_target._map_node_id)
+                                except Exception:
+                                    pass
                         finally:
                             self.game_state = 'map'
                             self.conversation_scene = None

@@ -104,6 +104,11 @@ class MapController:
                                         break
                                 if not node_obj:
                                     break
+                                # ignore clicks on nodes that are not enabled
+                                allowed = getattr(map_scene, 'enabled_nodes', None)
+                                if allowed is not None and node_obj.get('id') not in allowed:
+                                    # click on disabled node: ignore
+                                    break
                                 t = node_obj.get('type', 'monster')
                                 # monster/elite/boss -> initiate battle by setting collided_enemy
                                 if t in ('monster', 'elite', 'boss'):
@@ -112,6 +117,11 @@ class MapController:
                                         gid = random.choice(group_ids) if group_ids else 'default'
                                         # create a synthetic EnemySymbol for pending transition
                                         enemy_sym = EnemySymbol(0, 0, 32, gid)
+                                        # attach map node id so MapScene can advance after battle
+                                        try:
+                                            enemy_sym._map_node_id = nid
+                                        except Exception:
+                                            pass
                                         # set pending battle so MapScene.update doesn't clear it
                                         map_scene._pending_battle = enemy_sym
                                     except Exception:
@@ -131,6 +141,10 @@ class MapController:
                                     conv = conv_map.get(t, 'test_choice_conversation')
                                     # return a temporary Npc-like object with conversation_id
                                     temp_npc = Npc(-100, -100, map_scene.grid_size or 32, conv)
+                                    try:
+                                        temp_npc._map_node_id = nid
+                                    except Exception:
+                                        pass
                                     return temp_npc
 
             if event.type == pygame.KEYDOWN:

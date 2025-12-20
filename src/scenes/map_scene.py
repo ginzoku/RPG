@@ -61,6 +61,37 @@ class MapScene:
             self.map_graph = generate_map()
         except Exception:
             self.map_graph = None
+        # track enabled/completed nodes for sequential unlocking
+        self.completed_nodes = set()
+        self.enabled_nodes = set()
+        try:
+            if self.map_graph and len(self.map_graph) > 0 and len(self.map_graph[0]) > 0:
+                # start from the entire top row (allow selecting any node on level 0)
+                for n in self.map_graph[0]:
+                    try:
+                        self.enabled_nodes.add(n['id'])
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+    def mark_node_completed(self, node_id: int):
+        """Mark a map node as completed and enable its children."""
+        try:
+            if node_id in self.completed_nodes:
+                return
+            self.completed_nodes.add(node_id)
+            # disable the completed node
+            if hasattr(self, 'enabled_nodes'):
+                self.enabled_nodes.discard(node_id)
+            # enable all direct children (nodes that list this node as a parent)
+            if getattr(self, 'map_graph', None):
+                for lvl in self.map_graph:
+                    for n in lvl:
+                        if node_id in n.get('parents', []):
+                            self.enabled_nodes.add(n['id'])
+        except Exception:
+            pass
 
     def move_player(self, dx: int, dy: int):
         """プレイヤーを移動させる"""
@@ -102,4 +133,15 @@ class MapScene:
             pass
     
     def remove_enemy(self, enemy_to_remove: EnemySymbol):
-        self.enemies.remove(enemy_to_remove)
+        # if this synthetic/returned enemy carries a map node id, mark that node completed
+        try:
+            if hasattr(enemy_to_remove, '_map_node_id'):
+                self.mark_node_completed(enemy_to_remove._map_node_id)
+        except Exception:
+            pass
+        # attempt to remove any matching EnemySymbol instance from the active list
+        try:
+            self.enemies.remove(enemy_to_remove)
+        except Exception:
+            # ignore if not present
+            pass
