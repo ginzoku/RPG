@@ -122,6 +122,23 @@ class MapView:
                             if p in children_map:
                                 children_map[p].append(n['id'])
 
+                # determine hovered node and its parent ids for highlighting
+                try:
+                    hovered = getattr(map_scene, 'hovered_node', None)
+                except Exception:
+                    hovered = None
+                try:
+                    selected_source = getattr(map_scene, 'selected_source_node', None)
+                except Exception:
+                    selected_source = None
+                parents_of_hovered = set()
+                if hovered is not None:
+                    hovered_node = id_to_node.get(hovered)
+                    if hovered_node is not None:
+                        for pid in hovered_node.get('parents', []):
+                            if pid is not None:
+                                parents_of_hovered.add(pid)
+
                 # expose node positions to scene for hit-testing
                 try:
                     # store rects (x,y,w,h) for collision checks using computed radius
@@ -147,14 +164,35 @@ class MapView:
                             dx = x2 - x1
                             dy = y2 - y1
                             dist = (dx * dx + dy * dy) ** 0.5
+                            # determine if this connection should be highlighted (hovered node or hovered parent)
+                            try:
+                                hovered = getattr(map_scene, 'hovered_node', None)
+                            except Exception:
+                                hovered = None
+                            highlight = False
+                            try:
+                                selected_source = getattr(map_scene, 'selected_source_node', None)
+                            except Exception:
+                                selected_source = None
+                            try:
+                                # if a source is selected, highlight only the edge from that source to the hovered target
+                                if selected_source is not None and node.get('id') == hovered and p == selected_source:
+                                    highlight = True
+                                # if no source selected, highlight all incoming edges to hovered node
+                                elif selected_source is None and hovered is not None and node.get('id') == hovered:
+                                    highlight = True
+                            except Exception:
+                                pass
+                            line_color = (255, 215, 0) if highlight else (140, 140, 140)
+                            line_width = 5 if highlight else 3
                             if dist > 0:
                                 sx = x1 + dx * (r / dist)
                                 sy = y1 + dy * (r / dist)
                                 ex = x2 - dx * (r / dist)
                                 ey = y2 - dy * (r / dist)
-                                pygame.draw.line(overlay, (140, 140, 140), (int(sx), int(sy)), (int(ex), int(ey)), 3)
+                                pygame.draw.line(overlay, line_color, (int(sx), int(sy)), (int(ex), int(ey)), line_width)
                             else:
-                                pygame.draw.line(overlay, (140, 140, 140), (x1, y1), (x2, y2), 3)
+                                pygame.draw.line(overlay, line_color, (x1, y1), (x2, y2), line_width)
 
                 # draw nodes onto overlay (after connections so nodes overlay lines)
                 enabled_nodes = getattr(map_scene, 'enabled_nodes', None)
@@ -201,6 +239,21 @@ class MapView:
                             border_color = (30, 30, 30)
                         pygame.draw.circle(overlay, draw_color, (cx, cy), r)
                         pygame.draw.circle(overlay, border_color, (cx, cy), r, 2)
+                        # draw hover highlight: always highlight hovered node; if a source is selected,
+                        # highlight only that source and the connecting edge to hovered. Without a source,
+                        # highlight incoming parents as before.
+                        try:
+                            if hovered is not None and hovered == node.get('id'):
+                                # outer yellow ring for hovered target
+                                pygame.draw.circle(overlay, (255, 215, 0), (cx, cy), r + 4, 3)
+                            # if a source node is selected, highlight that source only
+                            if selected_source is not None and node.get('id') == selected_source:
+                                pygame.draw.circle(overlay, (255, 215, 0), (cx, cy), r + 3, 2)
+                            # if no source selected, fall back to highlighting all parents
+                            if selected_source is None and node.get('id') in parents_of_hovered:
+                                pygame.draw.circle(overlay, (255, 215, 0), (cx, cy), r + 3, 2)
+                        except Exception:
+                            pass
                         # draw expected score label if enabled
                         if SHOW_NODE_SCORES and node.get('id') in expected_scores:
                             val = expected_scores.get(node['id'], 0.0)
