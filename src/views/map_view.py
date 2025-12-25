@@ -275,9 +275,13 @@ class MapView:
                 # compute total content height and clamp scroll
                 total_height = level_margin * 2 + (count - 1) * level_spacing
                 cur_scroll = int(getattr(map_scene, 'overlay_scroll', 0) or 0)
-                if cur_scroll < 0:
-                    cur_scroll = 0
-                max_scroll = max(0, int(total_height - settings.SCREEN_HEIGHT))
+                # allow extra top/bottom margins consistent with controller
+                top_extra = 100
+                bottom_reduce = 100
+                min_scroll = -top_extra
+                max_scroll = max(min_scroll, int(total_height - settings.SCREEN_HEIGHT - bottom_reduce))
+                if cur_scroll < min_scroll:
+                    cur_scroll = min_scroll
                 if cur_scroll > max_scroll:
                     cur_scroll = max_scroll
 

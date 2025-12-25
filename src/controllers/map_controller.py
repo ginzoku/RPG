@@ -35,10 +35,14 @@ class MapController:
                         top_margin = 70
                         content_height = top_margin * 2 + (count - 1) * spacing
                         visible = settings.SCREEN_HEIGHT
-                    max_scroll = max(0, int(content_height - visible))
+                    # allow a bit of extra top/bottom margin when scrolling
+                    top_extra = 100
+                    bottom_reduce = 100
+                    min_scroll = -top_extra
+                    max_scroll = max(min_scroll, int(content_height - visible - bottom_reduce))
                     new = cur - event.y * scroll_step
-                    if new < 0:
-                        new = 0
+                    if new < min_scroll:
+                        new = min_scroll
                     if new > max_scroll:
                         new = max_scroll
                     # set target (controller updates target; view interpolates current toward it)
@@ -64,10 +68,14 @@ class MapController:
                         top_margin = 70
                         content_height = top_margin * 2 + (count - 1) * spacing
                         visible = settings.SCREEN_HEIGHT
-                    max_scroll = max(0, int(content_height - visible))
+                    # allow extra top/bottom scroll margins
+                    top_extra = 100
+                    bottom_reduce = 200
+                    min_scroll = -top_extra
+                    max_scroll = max(min_scroll, int(content_height - visible - bottom_reduce))
                     new = cur - direction * scroll_step
-                    if new < 0:
-                        new = 0
+                    if new < min_scroll:
+                        new = min_scroll
                     if new > max_scroll:
                         new = max_scroll
                     map_scene.overlay_scroll_target = new
