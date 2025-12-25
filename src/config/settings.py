@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 # ゲーム設定
-SCREEN_WIDTH: int = 1000
-SCREEN_HEIGHT: int = 600
+SCREEN_WIDTH: int = 1280
+SCREEN_HEIGHT: int = 720
 FPS: int = 60
 
 # フォントサイズ
