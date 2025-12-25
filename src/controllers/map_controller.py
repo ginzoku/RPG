@@ -124,11 +124,20 @@ class MapController:
                     # アイコンは画面右上に小さめに表示（スクリーン幅の1/20, margin=10）
                     icon_size = max(20, settings.SCREEN_WIDTH // 20)
                     margin = 10
-                    icon_rect = pygame.Rect(settings.SCREEN_WIDTH - margin - icon_size, margin, icon_size, icon_size)
-                    if icon_rect.collidepoint(mx, my):
-                        # トグル表示
+                    spacing = 8
+                    # options icon on the far right, map icon to its left
+                    options_rect = pygame.Rect(settings.SCREEN_WIDTH - margin - icon_size, margin, icon_size, icon_size)
+                    map_rect = pygame.Rect(settings.SCREEN_WIDTH - margin - icon_size - spacing - icon_size, margin, icon_size, icon_size)
+                    if map_rect.collidepoint(mx, my):
+                        # toggle map overlay
                         map_scene.overlay_active = not getattr(map_scene, 'overlay_active', False)
-                        # consume this event (don't treat as other interactions)
+                        continue
+                    if options_rect.collidepoint(mx, my):
+                        # toggle options panel on the scene
+                        try:
+                            map_scene.options_active = not getattr(map_scene, 'options_active', False)
+                        except Exception:
+                            map_scene.options_active = False
                         continue
 
                     # If overlay is active and we have a generated graph, check for node clicks

@@ -227,10 +227,10 @@ class MapView:
                         # dim nodes that are not yet enabled by reducing original color brightness
                         if enabled_nodes is not None and node.get('id') not in enabled_nodes:
                             try:
-                                factor = 0.65
+                                factor = 0.45
                                 draw_color = tuple(max(0, min(255, int(c * factor))) for c in color)
-                                # slightly darker border for disabled nodes
-                                border_color = tuple(max(0, min(255, int(b * 0.6))) for b in (30, 30, 30))
+                                # darker border for disabled nodes
+                                border_color = tuple(max(0, min(255, int(b * 0.4))) for b in (30, 30, 30))
                             except Exception:
                                 draw_color = (60, 60, 60)
                                 border_color = (30, 30, 30)
@@ -326,10 +326,43 @@ class MapView:
             # finally blit overlay with map content
             self.screen.blit(overlay, (0, 0))
 
-        # 右上アイコンを描画（オーバーレイの上に表示するため、ここで描く）
-        icon_rect = pygame.Rect(settings.SCREEN_WIDTH - self.icon_margin - self.icon_size, self.icon_margin, self.icon_size, self.icon_size)
-        pygame.draw.rect(self.screen, (40, 40, 40), icon_rect, border_radius=6)  # ダークグレーの背景
-        inner = icon_rect.inflate(-self.icon_size // 4, -self.icon_size // 4)
-        pygame.draw.rect(self.screen, (200, 200, 200), inner, border_radius=4)
+        # 右上に2つのアイコンを描画: 左がマップボタン、右がオプションボタン
+        icon_size = self.icon_size
+        margin = self.icon_margin
+        spacing = 8
+        options_rect = pygame.Rect(settings.SCREEN_WIDTH - margin - icon_size, margin, icon_size, icon_size)
+        map_rect = pygame.Rect(settings.SCREEN_WIDTH - margin - icon_size - spacing - icon_size, margin, icon_size, icon_size)
+
+        # map button (left) - green, no text
+        map_color = (60, 180, 80)
+        map_border = (30, 120, 50)
+        pygame.draw.rect(self.screen, map_color, map_rect, border_radius=6)
+        pygame.draw.rect(self.screen, map_border, map_rect, 2, border_radius=6)
+
+        # options button (right) - blue, no text
+        opt_color = (80, 140, 220)
+        opt_border = (40, 80, 160)
+        pygame.draw.rect(self.screen, opt_color, options_rect, border_radius=6)
+        pygame.draw.rect(self.screen, opt_border, options_rect, 2, border_radius=6)
+
+        # draw options panel when active
+        try:
+            if getattr(map_scene, 'options_active', False):
+                pw, ph = 360, 220
+                rx = (settings.SCREEN_WIDTH - pw) // 2
+                ry = (settings.SCREEN_HEIGHT - ph) // 2
+                panel = pygame.Rect(rx, ry, pw, ph)
+                surf = pygame.Surface((pw, ph), flags=pygame.SRCALPHA)
+                surf.fill((20, 20, 20, 230))
+                pygame.draw.rect(surf, (200, 200, 200), (0, 0, pw, ph), 2, border_radius=8)
+                # title
+                try:
+                    title = self.font.render('Options', True, (240, 240, 240))
+                    surf.blit(title, (16, 12))
+                except Exception:
+                    pass
+                self.screen.blit(surf, (rx, ry))
+        except Exception:
+            pass
 
         # NOTE: do not call `pygame.display.flip()` here — the main loop performs a single flip per frame.

@@ -66,6 +66,8 @@ class MapScene:
         self.enabled_nodes = set()
         # currently selected source node for making a choice (right-click to set)
         self.selected_source_node = None
+        # options panel active flag (toggled by options button)
+        self.options_active = False
         try:
             if self.map_graph and len(self.map_graph) > 0 and len(self.map_graph[0]) > 0:
                 # start from the entire top row (allow selecting any node on level 0)

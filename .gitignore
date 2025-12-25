@@ -33,3 +33,7 @@ tools/revert_map_view_connectors.py
 tools/sample_report.json
 tools/seed_22372363_dump.json
 tools/validate_dump.py
+scripts/check_fixed_rest_count.py
+scripts/check_prev_parents.py
+scripts/inspect_seed.py
+scripts/test_reduce_parents.py
