@@ -46,4 +46,13 @@ RELICS = {
             {"type": "enemy_stat_change", "stat": "attack_power", "value": 1} # 敵全体に適用
         ]
     }
+    ,
+    "blood_moon_charm": {
+        "name": "ブラッドムーンの護符",
+        "description": "最初の3回の戦闘開始時に、出現した敵全てのHPを1にする。3回使用すると無効化される。",
+        "color": settings.DARK_RED if hasattr(settings, 'DARK_RED') else settings.RED,
+        "effects": [
+            {"type": "reduce_enemies_to_one_on_battle_start", "uses": 3}
+        ]
+    }
 }

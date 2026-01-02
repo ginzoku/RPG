@@ -6,3 +6,5 @@ class Npc:
         self.rect = pygame.Rect(x, y, grid_size, grid_size)
         self.conversation_id = conversation_id
         self.color = (255, 255, 0) # 黄色
+        # このNPCが既に会話で使用されたか（トリガー無効化用）
+        self.consumed: bool = False

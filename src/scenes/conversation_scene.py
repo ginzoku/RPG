@@ -35,10 +35,64 @@ class ConversationScene:
         event = self.conversation_data["events"][self.current_event_index]
         # load any speaker images declared at conversation level
         try:
+            # conversation-level speaker_images may be:
+            # - mapping speaker -> path (string) [backwards compatible]
+            # - mapping speaker -> [path_for_event0, path_for_event1, ...]
+            # - mapping speaker -> {"default": path, "per_event": {index: path, ...}}
             sp_imgs = self.conversation_data.get('speaker_images', {}) or {}
-            for spk, path in sp_imgs.items():
+            for spk, spec in sp_imgs.items():
                 try:
-                    self.view.set_speaker_image(spk, path)
+                    # string -> simple assignment
+                    if isinstance(spec, str):
+                        self.view.set_speaker_image(spk, spec)
+                    # list -> select by current_event_index if available
+                    elif isinstance(spec, (list, tuple)):
+                        idx = int(self.current_event_index)
+                        if 0 <= idx < len(spec) and spec[idx]:
+                            self.view.set_speaker_image(spk, spec[idx])
+                        else:
+                            # fallback to first non-empty
+                            for item in spec:
+                                if isinstance(item, str) and item:
+                                    self.view.set_speaker_image(spk, item)
+                                    break
+                    # dict -> support {"default": path, "per_event": {idx: path}}
+                    elif isinstance(spec, dict):
+                        # per_event mapping
+                        per = spec.get('per_event') or {}
+                        used = False
+                        try:
+                            # keys in per may be ints or strings
+                            idx = self.current_event_index
+                            if idx in per:
+                                self.view.set_speaker_image(spk, per[idx])
+                                used = True
+                            else:
+                                key = str(idx)
+                                if key in per:
+                                    self.view.set_speaker_image(spk, per[key])
+                                    used = True
+                        except Exception:
+                            used = False
+
+                        if not used:
+                            # fall back to explicit index keys at top level
+                            try:
+                                if self.current_event_index in spec:
+                                    self.view.set_speaker_image(spk, spec[self.current_event_index])
+                                    used = True
+                                else:
+                                    key = str(self.current_event_index)
+                                    if key in spec:
+                                        self.view.set_speaker_image(spk, spec[key])
+                                        used = True
+                            except Exception:
+                                pass
+
+                        if not used:
+                            default = spec.get('default') or spec.get('0')
+                            if isinstance(default, str) and default:
+                                self.view.set_speaker_image(spk, default)
                 except Exception:
                     pass
         except Exception:

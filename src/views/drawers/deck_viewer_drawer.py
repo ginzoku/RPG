@@ -23,7 +23,7 @@ class DeckViewerDrawer:
         self.card_gap_y = 10
         self.viewport_height = 400
 
-    def draw(self, screen: pygame.Surface, deck_cards: list[str], player_for_power, title: str = "") -> pygame.Rect:
+    def draw(self, screen: pygame.Surface, deck_cards: list[str], player_for_power, title: str = "山札確認") -> pygame.Rect:
         deck_cards = deck_cards or []
         # display cards in ID order regardless of current deck order
         display_cards = sorted(list(deck_cards))
@@ -41,13 +41,8 @@ class DeckViewerDrawer:
         pygame.draw.rect(screen, (30, 30, 50), window_rect, border_radius=15)
         pygame.draw.rect(screen, settings.WHITE, window_rect, 3, border_radius=15)
 
-        # render the title only when provided (allow callers to suppress it)
-        if title:
-            try:
-                title_text = self.fonts["medium"].render(title, True, settings.YELLOW)
-                screen.blit(title_text, (window_rect.left + 20, window_rect.top + 20))
-            except Exception:
-                pass
+        title_text = self.fonts["medium"].render(title, True, settings.YELLOW)
+        screen.blit(title_text, (window_rect.left + 20, window_rect.top + 20))
 
         card_area_rect = pygame.Rect(window_rect.left + 20, window_rect.top + 60, window_rect.width - 40, window_rect.height - 120)
         self.viewport_height = card_area_rect.height

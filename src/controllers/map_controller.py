@@ -228,6 +228,9 @@ class MapController:
                 # 会話開始処理
                 if event.key == pygame.K_RETURN:
                     for npc in map_scene.npcs:
+                        # 既に会話で消費されたNPCは無視
+                        if getattr(npc, 'consumed', False):
+                            continue
                         # プレイヤーがNPCに隣接しているかチェック
                         if map_scene.player_rect.colliderect(npc.rect.inflate(map_scene.grid_size, map_scene.grid_size)):
                             return npc # 衝突したNPCオブジェクトを返す

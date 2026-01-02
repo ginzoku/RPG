@@ -84,8 +84,7 @@ class BattleView:
         if battle_state.showing_deck_viewer:
             # デッキ変換ルールがある場合は変換後の表示を行う
             effective_deck = battle_state.deck_manager.get_effective_deck()
-            # suppress title text for a cleaner UI
-            self.deck_viewer_drawer.draw(self.screen, effective_deck, battle_state.player, title="")
+            self.deck_viewer_drawer.draw(self.screen, effective_deck, battle_state.player, title="山札確認")
 
         # 捨て札ビューが表示中の場合
         if getattr(battle_state, 'showing_discard_viewer', False):
@@ -93,8 +92,7 @@ class BattleView:
             # get_effective_deck returns transformed view for the deck; for discard we need to map discard_pile as well
             if hasattr(battle_state.deck_manager, 'get_effective_card_id'):
                 effective_discard = [battle_state.deck_manager.get_effective_card_id(cid) for cid in battle_state.deck_manager.discard_pile]
-            # suppress title text for a cleaner UI
-            self.deck_viewer_drawer.draw(self.screen, effective_discard, battle_state.player, title="")
+            self.deck_viewer_drawer.draw(self.screen, effective_discard, battle_state.player, title="捨て札確認")
 
         # 発見カード選択画面が表示中の場合
         if battle_state.deck_manager and battle_state.deck_manager.is_discovering:
@@ -196,12 +194,7 @@ class BattleView:
             discard_rect = pygame.Rect(settings.SCREEN_WIDTH - btn_w - 10, settings.SCREEN_HEIGHT - btn_h - 20, btn_w, btn_h)
             pygame.draw.rect(self.screen, (50, 50, 70), discard_rect, border_radius=6)
             pygame.draw.rect(self.screen, settings.WHITE, discard_rect, 2, border_radius=6)
-            # show discard count instead of fixed label
-            try:
-                discard_count = len(battle_state.deck_manager.discard_pile) if getattr(battle_state, 'deck_manager', None) else 0
-            except Exception:
-                discard_count = 0
-            label = self.fonts["small"].render(str(discard_count), True, (0, 0, 0))
+            label = self.fonts["small"].render("捨て札", True, (0, 0, 0))
             label_rect = label.get_rect(center=discard_rect.center)
             self.screen.blit(label, label_rect)
             battle_state.discard_indicator_rect = discard_rect

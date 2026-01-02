@@ -8,7 +8,7 @@ class TitleView:
     def __init__(self):
         self.screen = None
         self.fonts = self._load_fonts()
-        self.menu_items = [("ゲームを始める", "start"), ("モンスター図鑑", "bestiary"), ("終了する", "quit")]
+        self.menu_items = [("ゲームを始める", "start"), ("デバッグ", "debug"), ("モンスター図鑑", "bestiary"), ("終了する", "quit")]
         self.menu_rects: list[tuple[pygame.Rect, str]] = []
         # 初期フォーカス（メニューインデックス）。デフォルトで「開始」を選択
         self.focus_index = 0

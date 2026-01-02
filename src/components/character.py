@@ -29,6 +29,8 @@ class Character:
         self.status_effects: dict[str, int] = {} # key: status_id, value: turns
         self.permanent_effects: list[str] = [] # 消去不可の永続効果
         self.relics: list[str] = [] # まず空で初期化
+        # レリックごとの残り使用回数を記録 (キー: relic_id, 値: remaining uses)
+        self.relic_uses_remaining: dict[str, int] = {}
         self.is_targeted: bool = False # ターゲット選択時にハイライトするためのフラグ
         self.gold: int = 0 # 所持ゴールド
 
@@ -49,6 +51,17 @@ class Character:
         if self.character_type == 'player':
             self.relics = ["red_stone"]
                         #    , "cursed_armor", "poison_orb", "shield_of_timing", "mana_exchange_amulet"] # 初期レリック
+            # 初期レリックの使用回数を設定
+            try:
+                from ..data.relic_data import RELICS
+                for rid in list(self.relics):
+                    rdata = RELICS.get(rid)
+                    if rdata and "effects" in rdata:
+                        for eff in rdata.get("effects", []):
+                            if isinstance(eff, dict) and eff.get("uses") is not None:
+                                self.relic_uses_remaining[rid] = int(eff.get("uses"))
+            except Exception:
+                pass
             # レリックの効果はBattleScene.resetで適用されるため、ここでは呼び出さない
             # self._apply_relic_effects()
 

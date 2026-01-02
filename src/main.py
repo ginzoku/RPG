@@ -180,7 +180,94 @@ class GameController:
                 self.title_scene.draw(self.screen)
                 # transitions from title
                 sel = getattr(self.title_scene, 'selected_option', None)
+                # 'start' はマップへ遷移するが、デバッグマップとは異なり
+                # - プレイヤーは画面中央下端から開始
+                # - マップ上の敵・会話イベント(NPC)は削除する
                 if sel == 'start':
+                    try:
+                        self.game_state = 'map'
+                        self.map_scene = MapScene()
+                        # 敵は消去するが、目の前にNPCを配置して会話を自動開始する
+                        try:
+                            self.map_scene.enemies = []
+                        except Exception:
+                            pass
+                        # プレイヤーをマップ下中央に配置（グリッド単位で計算）
+                        try:
+                            gs = getattr(self.map_scene, 'grid_size', None) or 1
+                            mw = getattr(self.map_scene, 'map_width', 1)
+                            mh = getattr(self.map_scene, 'map_height', 1)
+                            center_x = (mw // 2) * gs
+                            bottom_y = max(0, (mh - 1)) * gs
+                            if hasattr(self.map_scene, 'player_rect'):
+                                self.map_scene.player_rect.x = center_x
+                                self.map_scene.player_rect.y = bottom_y
+                        except Exception:
+                            pass
+
+                        # 目の前 (上方向) に NPC を置く
+                        try:
+                            from .components.npc import Npc
+                            # NPC の座標は player_rect の上1マスにする
+                            pr = getattr(self.map_scene, 'player_rect', None)
+                            if pr is not None:
+                                npc_x = pr.x
+                                npc_y = max(0, pr.y - (getattr(self.map_scene, 'grid_size', 1)))
+                            else:
+                                # fallback: center near bottom
+                                npc_x = center_x
+                                npc_y = max(0, bottom_y - (getattr(self.map_scene, 'grid_size', 1)))
+                            npc = Npc(npc_x, npc_y, getattr(self.map_scene, 'grid_size', 1), "npc_new_intro")
+                            # replace any npcs with this single NPC
+                            try:
+                                # mark as consumed to prevent immediate duplicate triggers
+                                npc.consumed = True
+                                self.map_scene.npcs = [npc]
+                            except Exception:
+                                npc.consumed = True
+                                self.map_scene.npcs = [npc]
+                        except Exception:
+                            npc = None
+
+                        # NPC が配置できたら自動で会話シーンを開始する
+                        try:
+                            if npc is not None:
+                                from .scenes.conversation_scene import ConversationScene
+                                from .views.map_conversation_view import MapConversationView
+
+                                def _conv_finished(result=None):
+                                    try:
+                                        # remove the NPC so it cannot retrigger
+                                        try:
+                                            if getattr(self, 'map_scene', None) and npc in self.map_scene.npcs:
+                                                try:
+                                                    self.map_scene.npcs.remove(npc)
+                                                except Exception:
+                                                    self.map_scene.npcs = [n for n in getattr(self.map_scene, 'npcs', []) if n is not npc]
+                                        except Exception:
+                                            pass
+                                        self.conversation_scene = None
+                                    finally:
+                                        self.game_state = 'map'
+
+                                self.conversation_scene = ConversationScene(self.player, npc.conversation_id, _conv_finished)
+                                # map 上での会話表示にする
+                                try:
+                                    bg = self.conversation_scene.conversation_data.get('default_background')
+                                    self.conversation_scene.view = MapConversationView(bg)
+                                    try:
+                                        self.conversation_scene._show_current_event()
+                                    except Exception:
+                                        pass
+                                except Exception:
+                                    pass
+                                self.game_state = 'conversation'
+                        except Exception:
+                            pass
+                    finally:
+                        self.title_scene.selected_option = None
+                elif sel == 'debug':
+                    # デバッグから直接マップへ遷移する（従来の start の動作）
                     self.game_state = 'map'
                     self.map_scene = MapScene()
                     self.title_scene.selected_option = None

@@ -48,6 +48,21 @@ CONVERSATIONS = {
         ]
     }
     ,
+    "npc_new_intro": {
+        "default_background": None,
+        # example: use a per-event list so the image can change by event index
+        "speaker_images": {
+            "旅人": [
+                "src/res/npc/npc.png",
+                "src/res/npc/npc.png"
+            ]
+        },
+        "events": [
+            {"speaker": "旅人", "text": "ようこそ。久しぶりに人に会ったよ。"},
+            {"speaker": "旅人", "text": "ここから先は気をつけたほうがいい。さあ、気をつけて行くんだ。", "end": True}
+        ]
+    }
+    ,
     "test_choice_conversation": {
         "default_background": None,
         "events": [
